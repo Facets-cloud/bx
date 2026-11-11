@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/cdp"
@@ -32,7 +33,7 @@ var skipRoles = map[string]bool{
 	"generic": true, "none": true, "presentation": true, "InlineTextBox": true,
 	"LineBreak": true, "RootWebArea": true, "paragraph": true, "group": true,
 	"Section": true, "LayoutTable": true, "LayoutTableRow": true, "LayoutTableCell": true,
-	"LabelText": true, "MenuListPopup": true,
+	"LabelText": true, "MenuListPopup": true, "ListMarker": true, "separator": true,
 }
 
 // boolProps are shown when true, such as [checked] or [disabled].
@@ -73,7 +74,7 @@ func (b *snapBuilder) walk(n *accessibility.Node, depth int, parentName string) 
 	}
 	keep := !n.Ignored && !skipRoles[role] && role != ""
 	// Text that repeats its parent's name (a link's own label) adds nothing.
-	if role == "StaticText" && (name == "" || name == parentName) {
+	if role == "StaticText" && (!hasWord(name) || name == parentName) {
 		keep = false
 	}
 	childDepth, childParent := depth, parentName
@@ -91,6 +92,17 @@ func (b *snapBuilder) walk(n *accessibility.Node, depth int, parentName string) 
 			b.walk(c, childDepth, childParent)
 		}
 	}
+}
+
+// hasWord reports whether s has a letter or digit; lone punctuation such
+// as a quote mark or a bullet says nothing.
+func hasWord(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // editable reports a contenteditable element.

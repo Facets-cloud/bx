@@ -172,3 +172,17 @@ func TestSnapshotTextboxIsLeaf(t *testing.T) {
 		t.Fatalf("want one textbox line, got %+v", got)
 	}
 }
+
+func TestSnapshotDropsNoise(t *testing.T) {
+	nodes := []*accessibility.Node{
+		{NodeID: "1", Role: axv("RootWebArea"), ChildIDs: []accessibility.NodeID{"2", "3", "4", "5"}},
+		{NodeID: "2", ParentID: "1", Role: axv("separator")},
+		{NodeID: "3", ParentID: "1", Role: axv("ListMarker"), Name: axv("•")},
+		{NodeID: "4", ParentID: "1", Role: axv("StaticText"), Name: axv("“")},
+		{NodeID: "5", ParentID: "1", Role: axv("StaticText"), Name: axv("3 items left!")},
+	}
+	got, _ := buildSnapshot(nodes)
+	if len(got) != 1 || got[0].Name != "3 items left!" {
+		t.Fatalf("want only the real text, got %+v", got)
+	}
+}

@@ -4,6 +4,11 @@ bx lets coding agents (Claude Code, Codex) drive the Chromium browser you
 already have open, in the profile you name, over the DevTools Protocol. It
 is one Go binary with no runtime dependencies and no telemetry.
 
+<p align="center">
+  <a href="docs/demo.mp4"><img src="docs/demo.gif" width="900" alt="Left, a terminal runs bx: it opens TodoMVC in the Personal profile, takes a snapshot that numbers the elements, fills the new-todo box by its ref, types two more todos, clicks a checkbox and the Active filter by their refs, and reads the remaining list. Right, the same browser tab follows each command."></a>
+</p>
+<p align="center"><sub>bx driving a real Brave tab: snapshot, refs, fill, type, click, read. <a href="docs/demo.mp4">Watch it in full quality</a>.</sub></p>
+
 ```sh
 bx list profiles
 id=$(bx open https://example.com --profile Work -o json | jq -r .id)
