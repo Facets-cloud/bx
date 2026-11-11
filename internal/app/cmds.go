@@ -167,9 +167,11 @@ func cmdScreenshot(e env) error {
 	if err := os.WriteFile(path, img.PNG, 0o644); err != nil {
 		return exit.New(exit.User, "write %s: %v", path, err)
 	}
-	if e.o.json {
+	switch {
+	case e.o.quiet:
+	case e.o.json:
 		e.o.printJSON(map[string]any{"path": path, "bytes": len(img.PNG)})
-	} else if !e.o.quiet {
+	default:
 		fmt.Fprintln(e.o.w, path)
 	}
 	return nil

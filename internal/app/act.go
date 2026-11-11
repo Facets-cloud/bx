@@ -162,9 +162,11 @@ func cmdSnapshot(e env) error {
 		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 			return exit.New(exit.User, "write %s: %v", path, err)
 		}
-		if e.o.json {
+		switch {
+		case e.o.quiet:
+		case e.o.json:
 			e.o.printJSON(map[string]any{"path": path, "nodes": len(s.Nodes)})
-		} else if !e.o.quiet {
+		default:
 			fmt.Fprintf(e.o.w, "%s (%d elements)\n", path, len(s.Nodes))
 		}
 		return nil
