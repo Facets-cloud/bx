@@ -65,6 +65,8 @@ browser and in System Settings.
    `checksums.txt` with `shasum -a 256 -c --ignore-missing checksums.txt`.
    Both files are at
    `https://github.com/Facets-cloud/bx/releases/latest/download/<file>`.
+   While the repo is private those URLs answer 404; use the GitHub CLI
+   instead: `gh release download --repo Facets-cloud/bx --pattern 'bx_darwin_<arch>.tar.gz' --pattern checksums.txt`.
 2. Unpack it and put `bx` on the PATH, in `~/.local/bin` if that is on the
    PATH, else `/usr/local/bin`. Remove macOS's quarantine flag:
    `xattr -d com.apple.quarantine <path>/bx 2>/dev/null || true`.
