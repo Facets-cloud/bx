@@ -248,8 +248,13 @@ func timeoutArg(a map[string]string) time.Duration {
 	return 30 * time.Second
 }
 
+// Version is the bx version this process runs; app sets it at startup.
+// A daemon keeps running the version it started with until it stops.
+var Version = "dev"
+
 // Status is what `bx status` shows.
 type Status struct {
+	Version       string    `json:"version"`
 	Browser       string    `json:"browser"`
 	PID           int       `json:"pid"`
 	Since         time.Time `json:"since"`
@@ -259,7 +264,7 @@ type Status struct {
 func (s *server) status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Status{Browser: s.b.Name, PID: os.Getpid(), Since: s.since, KnownProfiles: []string{}}
+	st := Status{Version: Version, Browser: s.b.Name, PID: os.Getpid(), Since: s.since, KnownProfiles: []string{}}
 	for _, dir := range s.profileOf {
 		st.KnownProfiles = append(st.KnownProfiles, dir)
 	}

@@ -15,7 +15,12 @@ logins and cookies.
 - **The browser asks first.** Each new DevTools connection makes the browser
   show an Allow dialog. bx holds one connection per browser run, so you
   answer once, after you run a bx command.
-- **Local only.** bx listens on no network port. Commands reach its
+  **Except the agent browser:** `bx launch` starts a separate browser with a
+  debugging port on 127.0.0.1 and no Allow dialog, so any program running
+  on your Mac can drive it. It is opt-in and has its own profile folder;
+  sign in there only to what agents need.
+- **Local only.** bx listens on no network port (the agent browser's
+  debugging port above is the browser's, bound to 127.0.0.1). Commands reach its
   background process over a Unix socket in `~/Library/Application Support/bx/`,
   a folder only your user account can open. Any process running as you can
   use that socket, as it could use your browser anyway.

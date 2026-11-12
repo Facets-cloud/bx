@@ -23,6 +23,7 @@ type Browser struct {
 	Label   string // how messages name it
 	DataDir string // user data dir, relative to $HOME
 	App     string // executable that accepts --profile-directory
+	Agent   bool   // a separate instance bx launched (see agent.go)
 	Inspect string // page where the user turns remote debugging on
 }
 
@@ -93,7 +94,16 @@ func Detect() Browser {
 }
 
 // Lookup returns the table entry named name (exact match).
+// A name ending in "-agent", such as "brave-agent", is that browser's
+// separate instance started by `bx launch`.
 func Lookup(name string) (Browser, error) {
+	if base, ok := strings.CutSuffix(name, AgentSuffix); ok {
+		b, err := Lookup(base)
+		if err != nil {
+			return Browser{}, err
+		}
+		return b.agent(), nil
+	}
 	for _, b := range table {
 		if b.Name == name {
 			return b, nil
@@ -113,6 +123,9 @@ func Names() []string {
 
 // Dir is the absolute user data dir.
 func (b Browser) Dir() string {
+	if filepath.IsAbs(b.DataDir) {
+		return b.DataDir
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, b.DataDir)
 }
@@ -126,7 +139,7 @@ func (b Browser) WSURL() (string, error) {
 			"cannot read %s's DevToolsActivePort: give your terminal app Full Disk Access (System Settings > Privacy & Security)", b.Label)
 	case errors.Is(err, fs.ErrNotExist):
 		return "", exit.New(exit.Upstream,
-			"%s is not running with remote debugging on: start it and turn debugging on at %s", b.Label, b.Inspect)
+			"%s is not running with remote debugging on: run bx setup, or turn it on at %s", b.Label, b.Inspect)
 	case err != nil:
 		return "", exit.New(exit.Upstream, "read DevToolsActivePort: %v", err)
 	}
@@ -149,7 +162,17 @@ type Profile struct {
 }
 
 // Profiles lists the profiles in Local State, sorted by folder name.
+// A fresh agent browser has not written its list yet; it always has the
+// Default profile.
 func (b Browser) Profiles() ([]Profile, error) {
+	ps, err := b.profiles()
+	if b.Agent && (err != nil || len(ps) == 0) {
+		return []Profile{{Dir: "Default", Name: "Default"}}, nil
+	}
+	return ps, err
+}
+
+func (b Browser) profiles() ([]Profile, error) {
 	data, err := os.ReadFile(filepath.Join(b.Dir(), "Local State"))
 	if err != nil {
 		if errors.Is(err, fs.ErrPermission) {
@@ -233,7 +256,12 @@ func (b Browser) LaunchProbe(profileDir, nonce string) error {
 }
 
 func (b Browser) launch(profileDir, rawURL string) error {
-	out, err := exec.Command(b.App, "--profile-directory="+profileDir, rawURL).CombinedOutput()
+	args := []string{"--profile-directory=" + profileDir, rawURL}
+	if b.Agent {
+		// Route to the agent instance, not the user's everyday browser.
+		args = append([]string{"--user-data-dir=" + b.Dir()}, args...)
+	}
+	out, err := exec.Command(b.App, args...).CombinedOutput()
 	if err != nil {
 		return exit.New(exit.Upstream, "launch %s: %v: %s", b.Label, err, strings.TrimSpace(string(out)))
 	}

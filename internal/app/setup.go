@@ -206,7 +206,9 @@ func install(e env, tag string) error {
 	if out, err := exec.Command(self, "skill", "update", "-q").CombinedOutput(); err != nil {
 		return exit.New(exit.Upstream, "reinstall skill: %v: %s", err, out)
 	}
-	_ = daemon.Call(e.b.Name, daemon.Request{Op: "stop"}, nil, false)
-	e.o.done("updated to " + tag)
+	// The running daemon keeps its browser connection, so the browser does
+	// not ask to Allow again; it switches to the new code when it next
+	// starts (browser restart, or bx stop).
+	e.o.done("updated to " + tag + "; the open browser connection keeps running the old version until the browser restarts or you run bx stop")
 	return nil
 }

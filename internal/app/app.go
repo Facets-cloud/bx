@@ -17,6 +17,9 @@ var Version = "dev"
 const usage = `bx — drive your running Chromium browser, one profile at a time
 
 Setup:
+  bx setup                          turn on remote debugging in the browser (quit it first)
+  bx launch                         start a separate agent browser: no setup, no Allow
+                                    prompts, its own logins (then use --browser <name>-agent)
   bx doctor                         check the browser, permissions, daemon and skill
   bx skill install|update           install the agent skill for Claude Code and Codex
   bx update [--check]               upgrade bx and its skill from the latest release
@@ -53,14 +56,16 @@ An <el> is a snapshot ref (e12) or a CSS selector.
 
 Session:
   bx status                         show the background connection, if any
-  bx stop                           close it (the browser asks to Allow again next time)
+  bx stop                           close it (the browser asks to Allow again next time);
+                                    for an agent browser, also quits it
 
 Global flags:
   -o table|json     output format (table on a terminal, JSON otherwise)
   -q                print nothing on success for actions
   --yes             confirm a destructive action
-  --browser <name>  browser to drive (%s); default: the one with
-                    remote debugging on, else brave
+  --browser <name>  browser to drive (%s, or <name>-agent
+                    for the one bx launch starts); default: $BX_BROWSER, else
+                    the one with remote debugging on, else brave
   --profile <name>  profile display name or folder name, exact match
   --timeout <dur>   how long to wait on the page (default 30s)
 
@@ -90,8 +95,13 @@ func Run(argv []string) int {
 		fmt.Printf(usage, joinNames())
 		return 0
 	}
+	daemon.Version = Version
 	b := browser.Detect()
-	if name := a.flags["browser"]; name != "" {
+	name := a.flags["browser"]
+	if name == "" {
+		name = os.Getenv("BX_BROWSER")
+	}
+	if name != "" {
 		if b, err = browser.Lookup(name); err != nil {
 			return o.fail(err)
 		}
@@ -120,6 +130,8 @@ var commands = map[string]func(e env) error{
 	"skill install": cmdSkillInstall,
 	"skill update":  cmdSkillInstall,
 	"update":        cmdUpdate,
+	"setup":         cmdSetup,
+	"launch":        cmdLaunch,
 	"list profiles": cmdListProfiles,
 	"list tabs":     cmdListTabs,
 	"show tab":      cmdShowTab,

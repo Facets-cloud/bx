@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -83,6 +84,11 @@ func Call(browser string, req Request, out any, start bool) error {
 	var resp Response
 	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
 		return exit.New(exit.Upstream, "daemon closed the connection: %v (see %s)", err, log)
+	}
+	if strings.HasPrefix(resp.Error, "unknown daemon op") {
+		// The running daemon is an older bx, kept alive across an upgrade
+		// so the browser does not ask to Allow again.
+		return exit.New(exit.User, "the running bx connection is older than this bx and lacks %q: run bx stop (the browser will ask to Allow once more)", req.Op)
 	}
 	if resp.Error != "" {
 		return &exit.Error{Code: resp.Code, Msg: resp.Error}

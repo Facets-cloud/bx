@@ -21,6 +21,11 @@ action as something the user did with their own hands.
   tab ID from `bx list tabs`.
 - The first command after the browser starts shows an Allow dialog in the
   browser. Tell the user to click it. Later commands reuse that connection.
+- If remote debugging is off (exit 3 saying so), ask the user to quit the
+  browser, then run `bx setup`. Never quit their browser yourself.
+- `--browser <name>-agent` (or `BX_BROWSER`) drives a separate agent browser
+  started with `bx launch`: no Allow dialog, but its own logins. Use it only
+  when the user set it up or asks for it.
 - Ask before submitting forms, sending messages, buying, deleting or
   changing settings on the user's behalf. Reading is fine.
 - `bx close tab` needs `--yes`. Close only tabs you opened.
@@ -49,7 +54,7 @@ bx dialog <tab> accept|dismiss [--text <reply>]
 bx front <tab>
 bx close tab <id> --yes
 bx cdp <Method> [<json-params>] [--tab <id>]
-bx status | bx stop | bx doctor
+bx status | bx stop | bx doctor | bx setup | bx launch
 ```
 
 An `<el>` is a ref from the tab's latest `bx snapshot` (such as `e12`) or

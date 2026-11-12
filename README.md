@@ -29,7 +29,8 @@ The browser asks you to Allow each new DevTools connection. So the first
 bx command starts a background process that holds one connection, and
 every later command, from any terminal or agent session, goes through it
 over a Unix socket in `~/Library/Application Support/bx/`. You click Allow
-once per browser run. The process exits when the browser quits or on
+once per browser run; `bx update` keeps the connection open, so upgrading
+doesn't cost another click. The process exits when the browser quits or on
 `bx stop`. It never exits just for being idle.
 
 The daemon also stays attached to every tab it touches. That keeps the
@@ -71,13 +72,13 @@ browser and in System Settings.
    PATH, else `/usr/local/bin`. Remove macOS's quarantine flag:
    `xattr -d com.apple.quarantine <path>/bx 2>/dev/null || true`.
 3. Run `bx skill install`. It installs the skill for Claude Code and Codex.
-4. Run `bx doctor -o json` and tell the user what still fails. Usually:
-   - **Remote debugging**: open the browser's inspect page, such as
-     `brave://inspect/#remote-debugging`, and turn it on.
-   - **Full Disk Access** for the terminal app (System Settings > Privacy &
-     Security), because macOS blocks reading the browser's profile folder.
-5. Tell the user that the first bx command makes the browser ask to Allow
-   the connection, once per browser run.
+4. Ask the user to give the terminal app **Full Disk Access** (System
+   Settings > Privacy & Security), because macOS blocks reading the
+   browser's profile folder.
+5. Run `bx setup`. It turns on the browser's remote-debugging switch, a
+   one-time setting; the browser must be quit first, and bx starts it again.
+6. Run `bx doctor -o json` and tell the user what still fails, and that the
+   first bx command makes the browser ask to Allow, once per browser run.
 
 ### Updates
 
@@ -101,17 +102,28 @@ tar -xzf "bx_darwin_${ARCH}.tar.gz" bx
 mkdir -p ~/.local/bin && mv bx ~/.local/bin/
 xattr -d com.apple.quarantine ~/.local/bin/bx 2>/dev/null || true
 bx skill install
+bx setup     # quit the browser first; turns on remote debugging once
 bx doctor
 ```
 
-Then turn on remote debugging in the browser and give your terminal app
-Full Disk Access, as above.
+Then give your terminal app Full Disk Access, quit the browser, and run
+`bx setup`.
 
 </details>
 
+### No prompts at all: an agent browser
+
+`bx launch` starts a separate instance of the browser for agents, with its
+own profile folder under `~/Library/Application Support/bx/`. It needs no
+setup and never shows the Allow dialog. Its logins are separate from your
+everyday profiles: sign in there to what agents need. Drive it with
+`--browser brave-agent` (or `export BX_BROWSER=brave-agent`); `bx stop
+--browser brave-agent` quits it. Without the Allow dialog, any program on
+your Mac can drive it, so keep its logins to what agents need.
+
 Supported: Brave (tested), Chrome, Chromium, Edge, Arc and Vivaldi (same
-layout, not yet tested). bx drives whichever one has remote debugging on;
-pass `--browser <name>` to choose. Adding a Chromium browser means adding
+layout, not yet tested). bx drives `$BX_BROWSER`, else whichever one has
+remote debugging on; pass `--browser <name>` to choose. Adding a Chromium browser means adding
 one entry to the table in `internal/browser/browser.go`.
 
 ## Security

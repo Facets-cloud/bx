@@ -226,13 +226,21 @@ func cmdStatus(e env) error {
 
 func cmdStop(e env) error {
 	err := daemon.Call(e.b.Name, daemon.Request{Op: "stop"}, nil, false)
-	if exit.CodeOf(err) == exit.User {
-		e.o.done("not running")
-		return nil
-	}
-	if err != nil {
+	if err != nil && exit.CodeOf(err) != exit.User {
 		return err
 	}
-	e.o.done("stopped")
+	msg := "stopped"
+	if err != nil {
+		msg = "not running"
+	}
+	// An agent browser exists only for bx, so stopping also quits it.
+	quit, qerr := e.b.QuitAgent()
+	if qerr != nil {
+		return qerr
+	}
+	if quit {
+		msg += "; quit " + e.b.Label
+	}
+	e.o.done(msg)
 	return nil
 }
