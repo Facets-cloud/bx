@@ -148,3 +148,10 @@ inspect page, such as brave://inspect/#remote-debugging), and the skill is
 current. It also reports when a newer bx exists: tell the user, and run
 `bx update` if they agree. Pass `--browser <name>` to any command to drive
 a browser other than the default.
+
+If clicks time out on a tab where the user has a DevTools window open,
+ask them to close DevTools on that tab (or resume it if it is paused in
+the debugger); bx reads console and network without it.
+
+To let the user watch, set `BX_FOLLOW=1`: every tab bx opens or acts in
+is brought to the front of its window.

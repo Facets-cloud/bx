@@ -64,6 +64,13 @@ func paths(browser string) (sock, lock, log string, err error) {
 // into out (when non-nil). With start set, it starts the daemon first if
 // none is running.
 func Call(browser string, req Request, out any, start bool) error {
+	if os.Getenv("BX_FOLLOW") == "1" {
+		// Bring each tab bx works in to the front, so the user can watch.
+		if req.Args == nil {
+			req.Args = map[string]string{}
+		}
+		req.Args["follow"] = "true"
+	}
 	sock, lock, log, err := paths(browser)
 	if err != nil {
 		return err

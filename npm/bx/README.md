@@ -99,8 +99,12 @@ debugging on. To pin one, pass `browser` in a tool call, or set it for the
 whole server:
 
 ```json
-"env": { "BX_BROWSER": "chrome" }
+"env": { "BX_BROWSER": "chrome", "BX_FOLLOW": "1" }
 ```
+
+`BX_FOLLOW=1` brings each tab the agent opens or acts in to the front of
+its window, so you can watch. Leave it out and the agent works in
+background tabs while you keep using the browser.
 
 To skip the Allow dialog entirely, the `launch` tool starts a separate
 copy of the browser just for agents, with its own profile and logins.

@@ -171,13 +171,20 @@ func (s *server) dispatch(req Request) (any, error) {
 	case "tabs":
 		return s.tabs(a["profile"])
 	case "open":
-		return s.open(a["profile"], a["url"], t)
+		tab, err := s.open(a["profile"], a["url"], t)
+		if err == nil && a["follow"] == "true" {
+			_, _ = s.front(tab.ID)
+		}
+		return tab, err
 	case "show":
 		return s.show(a["tab"])
 	case "close":
 		return s.closeTab(a["tab"])
 	case "cdp":
 		return s.cdp(a["tab"], a["method"], a["params"], t)
+	}
+	if a["follow"] == "true" && a["tab"] != "" && req.Op != "front" {
+		_, _ = s.front(a["tab"]) // best effort: never fail the op over it
 	}
 	return s.dispatchTab(req.Op, a, t)
 }
