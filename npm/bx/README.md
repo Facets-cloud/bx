@@ -2,7 +2,11 @@
 
 An MCP server that lets Claude, Codex, Cursor and other MCP clients drive
 the Chromium browser you already have open, in the profile you name, with
-your logins. macOS only. No telemetry.
+your logins. No telemetry.
+
+**Platforms:** macOS only for now, on Apple Silicon and Intel. Linux and
+Windows aren't supported yet. bx's lookup of browsers, profiles and
+processes is Mac-specific, and npm refuses to install the package elsewhere.
 
 ## Install
 

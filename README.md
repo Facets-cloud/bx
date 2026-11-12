@@ -4,6 +4,11 @@ bx lets coding agents (Claude Code, Codex) drive the Chromium browser you
 already have open, in the profile you name, over the DevTools Protocol. It
 is one Go binary with no runtime dependencies and no telemetry.
 
+**Platforms:** macOS only for now, on Apple Silicon and Intel. Linux and
+Windows aren't supported yet. bx's lookup of browsers, profiles and
+processes is Mac-specific. The browsers themselves offer the
+same remote debugging on every OS, so ports are welcome.
+
 <p align="center">
   <a href="docs/demo.mp4"><img src="docs/demo.gif" width="900" alt="Left, a terminal runs bx: it opens TodoMVC in the Personal profile, takes a snapshot that numbers the elements, fills the new-todo box by its ref, types two more todos, clicks a checkbox and the Active filter by their refs, and reads the remaining list. Right, the same browser tab follows each command."></a>
 </p>
