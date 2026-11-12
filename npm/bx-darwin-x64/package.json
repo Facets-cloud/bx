@@ -1,0 +1,18 @@
+{
+  "name": "@facets-cloud/bx-darwin-x64",
+  "version": "0.0.0",
+  "description": "The bx binary for macOS x64. Install @facets-cloud/bx instead.",
+  "license": "MIT",
+  "homepage": "https://github.com/Facets-cloud/bx",
+  "files": [
+    "bin/bx",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

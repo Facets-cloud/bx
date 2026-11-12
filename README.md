@@ -123,28 +123,35 @@ use it. `bx mcp` serves 22 tools on stdio: setup (`doctor`,
 `upload`, `dialog`, `close_tab`). They forward to the same background
 connection as the CLI, so every client shares one Allow per browser launch.
 
-MCP-only install:
+MCP-only install, with npm (no download step; npx fetches the latest):
 
-1. Put the `bx` binary somewhere permanent (step 1 and 2 above, or the
-   manual install below).
-2. Run `bx mcp install`. It adds bx to Claude Desktop's and Cursor's MCP
-   config, whichever are installed; restart the app.
-3. In the app, ask it to run the `doctor` tool. If remote debugging is off,
-   quit the browser and ask it to run `setup`.
+```sh
+claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp
+codex mcp add bx -- npx -y @facets-cloud/bx mcp
+```
+
+For Claude Desktop, Cursor and other apps, add this server to their MCP
+config, or run `npx -y @facets-cloud/bx mcp install` to do it for you:
+
+```json
+{ "mcpServers": { "bx": { "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"] } } }
+```
+
+Always use the full name `@facets-cloud/bx`: the unscoped npm package `bx`
+is an unrelated WebdriverIO tool.
+
+Without npm: put the `bx` binary somewhere permanent (steps 1 and 2 above,
+or the manual install below), then run `bx mcp install`.
+
+After installing, restart the app and:
+- ask it to run the `doctor` tool;
+- if remote debugging is off, quit the browser and ask it to run `setup`.
 
 Or paste this into any agent: *Install bx from
 https://github.com/Facets-cloud/bx as an MCP server.*
 
 To pin a browser, give the server an environment variable, for example
 `"env": {"BX_BROWSER": "chrome"}`, or pass `browser` in a tool call.
-
-Claude Code and Codex have their own commands (the skill and CLI cost
-fewer tokens there, but the server works too):
-
-```sh
-claude mcp add -s user bx -- bx mcp
-codex mcp add bx -- bx mcp
-```
 
 Any other client: a stdio server with command `/full/path/to/bx` and args
 `["mcp"]` (desktop apps don't see your shell's PATH).
@@ -181,6 +188,11 @@ bx's interaction design follows chrome-devtools-mcp (Apache-2.0); bx
 reimplements it in Go. See THIRD_PARTY_NOTICES.
 
 ## Develop
+
+npm packages: `scripts/npm-build.sh vX.Y.Z` builds `npm/` for a version;
+the release workflow publishes them with the org's `NPM_TOKEN` (the same
+way facetsctl publishes `@facets-cloud/facetsctlv3`).
+
 
 ```sh
 go test ./...

@@ -147,6 +147,11 @@ func reportChecks(o out, cs []check) error {
 // cmdUpdate installs the latest release when it is newer than this binary.
 // With --check it only reports.
 func cmdUpdate(e env) error {
+	if viaNPM() && !e.a.has("check") {
+		// npm owns this binary; replacing it in place would confuse npm.
+		e.o.done("bx came from npm: npx -y " + npmPackage + " runs the latest, or run npm i -g " + npmPackage + "@latest")
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	latest, err := latestRelease(ctx)

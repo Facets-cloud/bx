@@ -1,0 +1,36 @@
+{
+  "name": "@facets-cloud/bx",
+  "version": "0.0.0",
+  "description": "Let coding agents drive your running Chromium browser, in the profile you name. CLI and MCP server.",
+  "license": "MIT",
+  "homepage": "https://github.com/Facets-cloud/bx",
+  "keywords": [
+    "mcp",
+    "browser",
+    "cdp",
+    "chrome",
+    "brave",
+    "agents",
+    "claude",
+    "codex"
+  ],
+  "bin": {
+    "bx": "bin/bx.js"
+  },
+  "files": [
+    "bin/bx.js",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@facets-cloud/bx-darwin-arm64": "0.0.0",
+    "@facets-cloud/bx-darwin-x64": "0.0.0"
+  }
+}

@@ -1,3 +1,8 @@
-bin/
+/bin/
 *.png
 .DS_Store
+npm/*/bin/bx
+npm/*/LICENSE
+npm/*/THIRD_PARTY_NOTICES
+npm/bx/README.md
+*.tgz

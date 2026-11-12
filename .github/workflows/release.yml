@@ -27,3 +27,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+
+  npm:
+    # Publishes @facets-cloud/bx and its per-platform binary packages, the
+    # same way facetsctl publishes @facets-cloud/facetsctlv3. Uses the
+    # org-level NPM_TOKEN secret.
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build packages
+        run: scripts/npm-build.sh "$GITHUB_REF_NAME"
+      - name: Configure .npmrc
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+      - name: Publish
+        run: |
+          # Platform packages first: @facets-cloud/bx depends on them.
+          for p in npm/bx-darwin-arm64 npm/bx-darwin-x64 npm/bx; do
+            (cd "$p" && npm publish --access public)
+          done
+      - name: Remove .npmrc
+        if: always()
+        run: rm -f ~/.npmrc

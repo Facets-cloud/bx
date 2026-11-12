@@ -93,7 +93,8 @@ func TestMCPFillValidation(t *testing.T) {
 func TestAddMCPServerKeepsOtherSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cfg.json")
 	os.WriteFile(path, []byte(`{"theme":"dark","n":12345678901234567890,"mcpServers":{"other":{"command":"x"}}}`), 0o600)
-	if err := addMCPServer(path, "/opt/bin/bx"); err != nil {
+	entry := map[string]any{"command": "/opt/bin/bx", "args": []string{"mcp"}}
+	if err := addMCPServer(path, entry); err != nil {
 		t.Fatal(err)
 	}
 	var cfg map[string]any
@@ -109,7 +110,7 @@ func TestAddMCPServerKeepsOtherSettings(t *testing.T) {
 	}
 	// Broken JSON is left untouched.
 	os.WriteFile(path, []byte(`{nope`), 0o600)
-	if err := addMCPServer(path, "/opt/bin/bx"); err == nil {
+	if err := addMCPServer(path, entry); err == nil {
 		t.Error("invalid JSON must be refused")
 	}
 	if b, _ := os.ReadFile(path); string(b) != `{nope` {
@@ -117,7 +118,7 @@ func TestAddMCPServerKeepsOtherSettings(t *testing.T) {
 	}
 	// A missing file is created.
 	fresh := filepath.Join(t.TempDir(), "sub", "mcp.json")
-	if err := addMCPServer(fresh, "/opt/bin/bx"); err != nil {
+	if err := addMCPServer(fresh, entry); err != nil {
 		t.Fatal(err)
 	}
 }

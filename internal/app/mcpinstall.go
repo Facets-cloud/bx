@@ -6,9 +6,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Facets-cloud/bx/internal/exit"
 )
+
+// npmPackage is the npm package that ships bx (see npm/).
+const npmPackage = "@facets-cloud/bx"
+
+// viaNPM reports whether this bx runs from an npm install: the npm
+// launcher sets BX_VIA_NPM, and the binary lives under node_modules.
+func viaNPM() bool {
+	if os.Getenv("BX_VIA_NPM") == "1" {
+		return true
+	}
+	self, err := os.Executable()
+	return err == nil && strings.Contains(self, "/node_modules/")
+}
 
 // mcpClient is an app whose MCP servers live in a JSON file under
 // "mcpServers". Its app folder must exist for bx to touch the file.
@@ -33,6 +47,14 @@ func cmdMCPInstall(e env) error {
 	if err != nil {
 		return err
 	}
+	entry := map[string]any{"command": self, "args": []string{"mcp"}}
+	cliCmd := self + " mcp"
+	if viaNPM() {
+		// npx resolves the latest published bx each time; a path into the
+		// npx cache would go stale.
+		entry = map[string]any{"command": "npx", "args": []string{"-y", npmPackage, "mcp"}}
+		cliCmd = "npx -y " + npmPackage + " mcp"
+	}
 	home, _ := os.UserHomeDir()
 	var done []string
 	for _, c := range mcpClients {
@@ -40,12 +62,12 @@ func cmdMCPInstall(e env) error {
 			continue
 		}
 		path := filepath.Join(home, c.Config)
-		if err := addMCPServer(path, self); err != nil {
+		if err := addMCPServer(path, entry); err != nil {
 			return exit.New(exit.User, "add bx to %s (%s): %v", c.Name, path, err)
 		}
 		done = append(done, c.Name+": "+path)
 	}
-	cli := []string{"claude mcp add -s user bx -- " + self + " mcp", "codex mcp add bx -- " + self + " mcp"}
+	cli := []string{"claude mcp add -s user bx -- " + cliCmd, "codex mcp add bx -- " + cliCmd}
 	switch {
 	case e.o.quiet:
 	case e.o.json:
@@ -68,7 +90,7 @@ func cmdMCPInstall(e env) error {
 
 // addMCPServer sets mcpServers.bx in a client's JSON config, keeping
 // every other setting. A missing file is created.
-func addMCPServer(path, bin string) error {
+func addMCPServer(path string, entry map[string]any) error {
 	cfg := map[string]any{}
 	if raw, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(raw)) > 0 {
 		dec := json.NewDecoder(bytes.NewReader(raw))
@@ -83,7 +105,7 @@ func addMCPServer(path, bin string) error {
 	if servers == nil {
 		servers = map[string]any{}
 	}
-	servers["bx"] = map[string]any{"command": bin, "args": []string{"mcp"}}
+	servers["bx"] = entry
 	cfg["mcpServers"] = servers
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
