@@ -74,9 +74,10 @@ browser and in System Settings.
 3. Run `bx skill install`. It installs the skill for Claude Code and Codex.
    If the user asked for bx as an MCP server, run `bx mcp install` instead
    (or as well), and tell them to restart Claude Desktop or Cursor.
-4. Ask the user to give the terminal app **Full Disk Access** (System
-   Settings > Privacy & Security), because macOS blocks reading the
-   browser's profile folder.
+4. On macOS 27 and later, ask the user to give the terminal app **Full
+   Disk Access** (System Settings > Privacy & Security). macOS blocks
+   other apps from browser data folders, where the browser writes its
+   debugging port and profile names. Without it, bx exits with code 4.
 5. Run `bx setup`. It turns on the browser's remote-debugging switch, a
    one-time setting; the browser must be quit first, and bx starts it again.
 6. Run `bx doctor -o json` and tell the user what still fails, and that the

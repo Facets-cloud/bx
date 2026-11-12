@@ -40,20 +40,32 @@ an unrelated WebdriverIO tool.
 
    If the page has no remote-debugging switch, update the browser. Older
    versions don't have it.
-2. Restart your MCP app and ask it to run the `doctor` tool to check.
-3. On the first browser action, the browser asks you to Allow the
+2. **On macOS 27 and later**, give the app that runs the MCP server Full
+   Disk Access: System Settings > Privacy & Security > Full Disk Access.
+   That's your terminal for Claude Code and Codex, or Claude Desktop or
+   Cursor itself. See [Full Disk Access](#full-disk-access) for why.
+3. Restart your MCP app and ask it to run the `doctor` tool to check.
+4. On the first browser action, the browser asks you to Allow the
    connection. Click it once. It holds until the browser quits.
 
 Rather not do step 1 by hand? Quit the browser and ask the agent to run
 the `setup` tool. It switches the setting on for you (`off: true` switches
 it back off).
 
-If a tool fails with "macOS blocked reading", give the app that runs the
-server Full Disk Access (System Settings > Privacy & Security > Full Disk
-Access) and restart it. That's your terminal for Claude Code and Codex, or
-Claude Desktop or Cursor itself. macOS 27 and later keep other apps out of
-browser data folders, where the browser writes its debugging port. The
-`launch` browser doesn't need it.
+### Full Disk Access
+
+The browser writes its debugging port to a file in its own data folder,
+and keeps your profile names there too. bx has to read both. macOS 27 and
+later block other apps from browser data folders unless you've given them
+Full Disk Access. Without it, every tool fails with "macOS blocked
+reading". macOS 26 and earlier don't have this block.
+
+bx only reads two files there: `DevToolsActivePort` and `Local State`
+(plus writing `Local State` if you use `setup`). Full Disk Access is wider
+than that, so grant it only if you're comfortable with that app having it.
+If you'd rather not, use the `launch` browser instead: bx owns its folder,
+so it needs neither Full Disk Access nor the Allow click. It has its own
+logins, separate from your everyday profiles.
 
 If someone clicks "Turn off in settings" on the browser's "being
 controlled by automated test software" bar, remote debugging goes off and
