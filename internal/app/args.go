@@ -19,7 +19,7 @@ var valueFlags = map[string]string{
 
 var boolFlags = map[string]string{
 	"-q": "quiet", "--quiet": "quiet",
-	"--yes": "yes", "--full": "full", "--double": "double", "--gone": "gone", "--check": "check",
+	"--yes": "yes", "--full": "full", "--double": "double", "--gone": "gone", "--check": "check", "--off": "off",
 	"-h": "help", "--help": "help",
 }
 

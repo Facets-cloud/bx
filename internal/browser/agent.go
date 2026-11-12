@@ -64,10 +64,10 @@ func (b Browser) DebuggingEnabled() (bool, error) {
 	return v, nil
 }
 
-// EnableDebugging turns the remote-debugging switch on by editing Local
-// State. The browser rewrites that file when it quits, so it must not be
-// running. The old file is kept as "Local State.bx-backup".
-func (b Browser) EnableDebugging() error {
+// SetDebugging turns the remote-debugging switch on or off by editing
+// Local State. The browser rewrites that file when it quits, so it must not
+// be running.
+func (b Browser) SetDebugging(on bool) error {
 	if b.Running() {
 		return exit.New(exit.User, "quit %s first: it rewrites its settings when it quits", b.Label)
 	}
@@ -80,13 +80,10 @@ func (b Browser) EnableDebugging() error {
 	if err != nil {
 		return err
 	}
-	setPath(state, debugPref, true)
+	setPath(state, debugPref, on)
 	out, err := json.Marshal(state)
 	if err != nil {
 		return err
-	}
-	if err := os.WriteFile(path+".bx-backup", orig, 0o600); err != nil {
-		return exit.New(exit.User, "back up Local State: %v", err)
 	}
 	tmp := path + ".bx-tmp"
 	if err := os.WriteFile(tmp, out, 0o600); err != nil {
@@ -148,7 +145,7 @@ func setPath(m map[string]any, path []string, v any) {
 	m[path[len(path)-1]] = v
 }
 
-// Start opens the browser app normally (for after EnableDebugging).
+// Start opens the browser app normally (after SetDebugging).
 func (b Browser) Start() error {
 	bundle := b.App
 	if i := strings.Index(bundle, ".app/"); i >= 0 {

@@ -133,7 +133,7 @@ func TestEnableDebugging(t *testing.T) {
 	if on, _ := b.DebuggingEnabled(); on {
 		t.Fatal("starts off")
 	}
-	if err := b.EnableDebugging(); err != nil {
+	if err := b.SetDebugging(true); err != nil {
 		t.Fatal(err)
 	}
 	if on, err := b.DebuggingEnabled(); !on || err != nil {
@@ -146,8 +146,11 @@ func TestEnableDebugging(t *testing.T) {
 			t.Errorf("lost %s in %s", want, got)
 		}
 	}
-	if b, _ := os.ReadFile(path + ".bx-backup"); string(b) != orig {
-		t.Error("no backup of the original")
+	if err := b.SetDebugging(false); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := b.DebuggingEnabled(); on {
+		t.Error("SetDebugging(false) left it on")
 	}
 
 	// A lock left by a dead browser does not count as running.
@@ -160,7 +163,7 @@ func TestEnableDebugging(t *testing.T) {
 	// A running browser would overwrite the change: refuse. (Our own PID
 	// stands in for a live browser.)
 	os.Symlink(fmt.Sprintf("host-%d", os.Getpid()), lock)
-	if err := b.EnableDebugging(); exit.CodeOf(err) != exit.User {
+	if err := b.SetDebugging(true); exit.CodeOf(err) != exit.User {
 		t.Fatalf("running browser: got %v", err)
 	}
 }

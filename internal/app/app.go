@@ -17,7 +17,8 @@ var Version = "dev"
 const usage = `bx — drive your running Chromium browser, one profile at a time
 
 Setup:
-  bx setup                          turn on remote debugging in the browser (quit it first)
+  bx setup [--off]                  turn remote debugging on (or off) in the browser;
+                                    quit the browser first
   bx launch                         start a separate agent browser: no setup, no Allow
                                     prompts, its own logins (then use --browser <name>-agent)
   bx list browsers                  each supported browser: installed, running, debugging on

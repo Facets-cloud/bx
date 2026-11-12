@@ -22,6 +22,9 @@ func cmdSetup(e env) error {
 	if err != nil {
 		return err
 	}
+	if e.a.has("off") {
+		return setupOff(e, b, on)
+	}
 	switch {
 	case on && b.Running():
 		e.o.done("remote debugging is already on in " + b.Label)
@@ -32,7 +35,7 @@ func cmdSetup(e env) error {
 	case b.Running():
 		return exit.New(exit.User, "quit %s, then run bx setup again (or turn it on yourself at %s)", b.Label, b.Inspect)
 	}
-	if err := b.EnableDebugging(); err != nil {
+	if err := b.SetDebugging(true); err != nil {
 		return err
 	}
 	if err := b.Start(); err != nil {
@@ -42,6 +45,22 @@ func cmdSetup(e env) error {
 		return exit.New(exit.Upstream, "%s started but did not turn debugging on; turn it on at %s", b.Label, b.Inspect)
 	}
 	e.o.done(fmt.Sprintf("remote debugging is on in %s; the first bx command asks you to Allow once", b.Label))
+	return nil
+}
+
+// setupOff turns the switch back off; the browser must be quit.
+func setupOff(e env, b browser.Browser, on bool) error {
+	if !on {
+		e.o.done("remote debugging is already off in " + b.Label)
+		return nil
+	}
+	if b.Running() {
+		return exit.New(exit.User, "quit %s, then run bx setup --off again", b.Label)
+	}
+	if err := b.SetDebugging(false); err != nil {
+		return err
+	}
+	e.o.done("remote debugging is off in " + b.Label + "; bx can't reach it until you run bx setup again")
 	return nil
 }
 
