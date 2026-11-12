@@ -63,7 +63,7 @@ func TestMCPProtocol(t *testing.T) {
 			t.Errorf("%s: schema is not an object", m["name"])
 		}
 	}
-	for _, want := range []string{"list_profiles", "open", "snapshot", "click", "fill", "screenshot", "dialog"} {
+	for _, want := range []string{"doctor", "list_browsers", "setup", "launch", "list_profiles", "open", "snapshot", "click", "fill", "screenshot", "dialog"} {
 		if !names[want] {
 			t.Errorf("missing tool %s", want)
 		}

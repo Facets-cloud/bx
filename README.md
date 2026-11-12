@@ -72,6 +72,8 @@ browser and in System Settings.
    PATH, else `/usr/local/bin`. Remove macOS's quarantine flag:
    `xattr -d com.apple.quarantine <path>/bx 2>/dev/null || true`.
 3. Run `bx skill install`. It installs the skill for Claude Code and Codex.
+   If the user asked for bx as an MCP server, run `bx mcp install` instead
+   (or as well), and tell them to restart Claude Desktop or Cursor.
 4. Ask the user to give the terminal app **Full Disk Access** (System
    Settings > Privacy & Security), because macOS blocks reading the
    browser's profile folder.
@@ -111,14 +113,33 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 
 </details>
 
-### MCP clients (Claude Desktop, Cursor)
+### Use it as an MCP server
 
-`bx mcp` is the same tool as a Model Context Protocol server on stdio: 18
-tools (open, snapshot, click, fill, screenshot and the rest) that forward
-to the same background connection as the CLI, so every client shares one
-Allow. `bx mcp install` adds it to Claude Desktop's and Cursor's config
-(whichever are installed); restart the app after. For Claude Code and
-Codex the skill is cheaper, but the server works there too:
+bx is also a Model Context Protocol server, and MCP can be the only way you
+use it. `bx mcp` serves 22 tools on stdio: setup (`doctor`,
+`list_browsers`, `setup`, `launch`), reading (`list_profiles`,
+`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`) and acting
+(`open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`,
+`upload`, `dialog`, `close_tab`). They forward to the same background
+connection as the CLI, so every client shares one Allow per browser launch.
+
+MCP-only install:
+
+1. Put the `bx` binary somewhere permanent (step 1 and 2 above, or the
+   manual install below).
+2. Run `bx mcp install`. It adds bx to Claude Desktop's and Cursor's MCP
+   config, whichever are installed; restart the app.
+3. In the app, ask it to run the `doctor` tool. If remote debugging is off,
+   quit the browser and ask it to run `setup`.
+
+Or paste this into any agent: *Install bx from
+https://github.com/Facets-cloud/bx as an MCP server.*
+
+To pin a browser, give the server an environment variable, for example
+`"env": {"BX_BROWSER": "chrome"}`, or pass `browser` in a tool call.
+
+Claude Code and Codex have their own commands (the skill and CLI cost
+fewer tokens there, but the server works too):
 
 ```sh
 claude mcp add -s user bx -- bx mcp

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Facets-cloud/bx/internal/daemon"
@@ -122,6 +123,7 @@ func handleMCP(m rpcMsg, tools []mcpTool, byName map[string]mcpTool) rpcMsg {
 }
 
 const mcpInstructions = `bx drives the user's own running browser, in a named profile, with their logins. ` +
+	`If a call fails, run doctor; if remote debugging is off, ask the user to quit the browser, then run setup. ` +
 	`Start with list_profiles or list_tabs, then snapshot a tab: each element gets a ref like e12 that ` +
 	`click, fill and the other actions accept. Ask the user before submitting forms, sending messages, ` +
 	`buying or deleting. The first call after the browser starts makes it ask the user to Allow.`
@@ -235,7 +237,7 @@ var (
 )
 
 func mcpTools() []mcpTool {
-	return append(readTools(), actTools()...)
+	return append(append(setupTools(), readTools()...), actTools()...)
 }
 
 // readTools look at the browser and change nothing.
@@ -264,6 +266,60 @@ func readTools() []mcpTool {
 			map[string]any{"tab": tab, "text": str("Text to wait for."), "selector": el, "gone": boolean("Wait for it to disappear.")},
 			[]string{"tab"}, map[string]string{"tab": "tab", "text": "text", "selector": "selector", "gone": "gone"}),
 	}
+}
+
+// setupTools let an MCP-only user check and prepare the browser without
+// the CLI. Each runs the CLI command of the same name.
+func setupTools() []mcpTool {
+	return []mcpTool{
+		cliTool("doctor", "Check the browser: installed, profiles readable (Full Disk Access), remote debugging on, connection, bx version. Run this first when something fails.",
+			cmdDoctor, nil),
+		cliTool("list_browsers", "Each supported browser: installed, running, remote debugging on, connected, and which is the default.",
+			cmdListBrowsers, nil),
+		cliTool("setup", "Turn the browser's remote-debugging switch on (or off with off=true). The user must quit the browser first; bx then starts it. Ask the user before running it.",
+			cmdSetup, map[string]any{"off": boolean("Turn it off instead.")}),
+		cliTool("launch", "Start a separate agent browser with its own profile folder: no setup and no Allow prompt, but its own logins. Then pass browser=<name>-agent. Ask the user first.",
+			cmdLaunch, nil),
+	}
+}
+
+// cliTool runs a CLI command with JSON output and returns that output.
+func cliTool(name, desc string, command func(env) error, props map[string]any) mcpTool {
+	return mcpTool{Name: name, Description: desc, InputSchema: schema(props, nil),
+		run: func(args map[string]any) (mcpContent, error) {
+			b, err := chooseBrowser(argString(args, "browser"))
+			if err != nil {
+				return mcpContent{}, err
+			}
+			var buf strings.Builder
+			a := args2(args)
+			e := env{a: a, o: out{json: true, w: &buf, errw: io.Discard}, b: b, mcp: true}
+			runErr := command(e)
+			// doctor reports failed checks as an error, but its output is the
+			// answer the client needs.
+			if buf.Len() > 0 {
+				return mcpContent{text: buf.String()}, nil
+			}
+			if runErr != nil {
+				return mcpContent{}, runErr
+			}
+			return mcpContent{text: `{"ok":true}`}, nil
+		}}
+}
+
+// args2 turns tool arguments into CLI flags (booleans set when true).
+func args2(in map[string]any) args {
+	a := args{flags: map[string]string{}}
+	for k, v := range in {
+		if b, ok := v.(bool); ok {
+			if b {
+				a.flags[k] = "true"
+			}
+			continue
+		}
+		a.flags[k] = argString(in, k)
+	}
+	return a
 }
 
 // actTools change the page or the browser.

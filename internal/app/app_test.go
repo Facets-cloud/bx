@@ -112,7 +112,7 @@ func TestDoneAndQuiet(t *testing.T) {
 	out{w: &b}.done("clicked x")
 	out{w: &b, quiet: true}.done("hidden")
 	out{w: &b, json: true}.done("ignored")
-	if got := b.String(); got != "clicked x\n{\n  \"ok\": true\n}\n" {
+	if got := b.String(); got != "clicked x\n{\n  \"message\": \"ignored\",\n  \"ok\": true\n}\n" {
 		t.Fatalf("got %q", got)
 	}
 }

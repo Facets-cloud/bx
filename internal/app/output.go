@@ -60,7 +60,7 @@ func (o out) done(msg string) {
 	switch {
 	case o.quiet:
 	case o.json:
-		o.printJSON(map[string]bool{"ok": true})
+		o.printJSON(map[string]any{"ok": true, "message": msg})
 	default:
 		fmt.Fprintln(o.w, msg)
 	}

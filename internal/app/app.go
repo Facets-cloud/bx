@@ -85,6 +85,7 @@ type env struct {
 	o   out
 	b   browser.Browser
 	pos []string // positional words after the command words
+	mcp bool     // run on behalf of an MCP client (bx mcp)
 }
 
 // Run runs the CLI and returns the exit code.

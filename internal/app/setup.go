@@ -74,7 +74,9 @@ func cmdDoctor(e env) error {
 	add("profiles readable", err, fmt.Sprintf("%d profiles", len(ps)))
 	_, err = e.b.WSURL()
 	add("remote debugging on", err, "DevToolsActivePort found")
-	add("skill installed", skillInstalled(), "up to date")
+	if !e.mcp { // MCP clients don't use the skill
+		add("skill installed", skillInstalled(), "up to date")
+	}
 	running := "no; the next command starts it"
 	if daemon.Running(e.b.Name) {
 		running = "yes"
