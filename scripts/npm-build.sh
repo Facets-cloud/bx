@@ -13,7 +13,7 @@ for pair in arm64:arm64 x64:amd64; do
     -ldflags "-s -w -X main.version=$tag" -o "$dir/bin/bx" .
   cp LICENSE THIRD_PARTY_NOTICES "$dir/"
 done
-cp README.md LICENSE THIRD_PARTY_NOTICES npm/bx/
+cp LICENSE THIRD_PARTY_NOTICES npm/bx/
 for f in npm/*/package.json; do
   node -e '
     const fs = require("fs"), [f, v] = process.argv.slice(1);

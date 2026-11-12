@@ -1,7 +1,7 @@
 {
   "name": "@facets-cloud/bx",
   "version": "0.0.0",
-  "description": "Let coding agents drive your running Chromium browser, in the profile you name. CLI and MCP server.",
+  "description": "Let coding agents drive your running Chromium browser, in the profile you name. An MCP server for Claude, Codex and Cursor.",
   "license": "MIT",
   "homepage": "https://github.com/Facets-cloud/bx",
   "keywords": [
