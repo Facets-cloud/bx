@@ -49,9 +49,21 @@ jobs:
       - name: Publish
         run: |
           # Platform packages first: @facets-cloud/bx depends on them.
-          for p in npm/bx-darwin-arm64 npm/bx-darwin-x64 npm/bx; do
+          for p in npm/bx-darwin-arm64 npm/bx-darwin-x64; do
             (cd "$p" && npm publish --access public)
           done
+          # npm takes minutes to serve a new version. Publishing the
+          # launcher before its binaries are served makes npx install it
+          # without them, so wait (up to 15 minutes).
+          v="${GITHUB_REF_NAME#v}"
+          for p in bx-darwin-arm64 bx-darwin-x64; do
+            for i in $(seq 1 60); do
+              npm view "@facets-cloud/$p@$v" version --prefer-online >/dev/null 2>&1 && break
+              [ "$i" = 60 ] && { echo "@facets-cloud/$p@$v never appeared"; exit 1; }
+              sleep 15
+            done
+          done
+          (cd npm/bx && npm publish --access public)
       - name: Remove .npmrc
         if: always()
         run: rm -f ~/.npmrc
