@@ -111,6 +111,23 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 
 </details>
 
+### MCP clients (Claude Desktop, Cursor)
+
+`bx mcp` is the same tool as a Model Context Protocol server on stdio: 18
+tools (open, snapshot, click, fill, screenshot and the rest) that forward
+to the same background connection as the CLI, so every client shares one
+Allow. `bx mcp install` adds it to Claude Desktop's and Cursor's config
+(whichever are installed); restart the app after. For Claude Code and
+Codex the skill is cheaper, but the server works there too:
+
+```sh
+claude mcp add -s user bx -- bx mcp
+codex mcp add bx -- bx mcp
+```
+
+Any other client: a stdio server with command `/full/path/to/bx` and args
+`["mcp"]` (desktop apps don't see your shell's PATH).
+
 ### No prompts at all: an agent browser
 
 `bx launch` starts a separate instance of the browser for agents, with its

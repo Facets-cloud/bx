@@ -21,6 +21,8 @@ Setup:
                                     quit the browser first
   bx launch                         start a separate agent browser: no setup, no Allow
                                     prompts, its own logins (then use --browser <name>-agent)
+  bx mcp                            run as an MCP server on stdio (for Claude Desktop, Cursor)
+  bx mcp install                    add bx to Claude Desktop's and Cursor's MCP config
   bx list browsers                  each supported browser: installed, running, debugging on
   bx use <browser>                  make it the default (see --browser below)
   bx doctor                         check the browser, permissions, daemon and skill
@@ -131,6 +133,8 @@ var commands = map[string]func(e env) error{
 	"setup":         cmdSetup,
 	"list browsers": cmdListBrowsers,
 	"use":           cmdUse,
+	"mcp":           cmdMCP,
+	"mcp install":   cmdMCPInstall,
 	"launch":        cmdLaunch,
 	"list profiles": cmdListProfiles,
 	"list tabs":     cmdListTabs,
