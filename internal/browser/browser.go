@@ -136,7 +136,7 @@ func (b Browser) WSURL() (string, error) {
 	switch {
 	case errors.Is(err, fs.ErrPermission):
 		return "", exit.New(exit.Permission,
-			"cannot read %s's DevToolsActivePort: give your terminal app Full Disk Access (System Settings > Privacy & Security)", b.Label)
+			"macOS blocked reading %s's DevToolsActivePort: give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it", b.Label)
 	case errors.Is(err, fs.ErrNotExist):
 		return "", exit.New(exit.Upstream,
 			"%s is not running with remote debugging on: turn it on at %s (or quit the browser and run bx setup)", b.Label, b.Inspect)
@@ -176,7 +176,7 @@ func (b Browser) profiles() ([]Profile, error) {
 	data, err := os.ReadFile(filepath.Join(b.Dir(), "Local State"))
 	if err != nil {
 		if errors.Is(err, fs.ErrPermission) {
-			return nil, exit.New(exit.Permission, "cannot read %s's Local State: give your terminal app Full Disk Access", b.Label)
+			return nil, exit.New(exit.Permission, "macOS blocked reading %s's Local State: give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it", b.Label)
 		}
 		return nil, exit.New(exit.Upstream, "read %s profiles: %v", b.Label, err)
 	}

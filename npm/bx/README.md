@@ -40,18 +40,24 @@ an unrelated WebdriverIO tool.
 
    If the page has no remote-debugging switch, update the browser. Older
    versions don't have it.
-2. Give the app that runs the MCP server Full Disk Access (System
-   Settings > Privacy & Security > Full Disk Access): your terminal for
-   Claude Code and Codex, or Claude Desktop or Cursor itself. On recent
-   macOS versions bx can't read the browser's debugging port file without
-   it.
-3. Restart your MCP app and ask it to run the `doctor` tool to check.
-4. On the first browser action, the browser asks you to Allow the
+2. Restart your MCP app and ask it to run the `doctor` tool to check.
+3. On the first browser action, the browser asks you to Allow the
    connection. Click it once. It holds until the browser quits.
 
 Rather not do step 1 by hand? Quit the browser and ask the agent to run
 the `setup` tool. It switches the setting on for you (`off: true` switches
 it back off).
+
+If a tool fails with "macOS blocked reading", give the app that runs the
+server Full Disk Access (System Settings > Privacy & Security > Full Disk
+Access) and restart it. That's your terminal for Claude Code and Codex, or
+Claude Desktop or Cursor itself. macOS 27 and later keep other apps out of
+browser data folders, where the browser writes its debugging port. The
+`launch` browser doesn't need it.
+
+If someone clicks "Turn off in settings" on the browser's "being
+controlled by automated test software" bar, remote debugging goes off and
+bx can't connect until it's switched on again.
 
 ## Tools
 

@@ -103,7 +103,7 @@ func (b Browser) readLocalState() (map[string]any, error) {
 func localStateErr(b Browser, err error) error {
 	switch {
 	case errors.Is(err, fs.ErrPermission):
-		return exit.New(exit.Permission, "cannot read %s's settings: give your terminal app Full Disk Access", b.Label)
+		return exit.New(exit.Permission, "macOS blocked reading %s's settings: give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it", b.Label)
 	case errors.Is(err, fs.ErrNotExist):
 		return exit.New(exit.User, "%s has no settings yet: start it once, then quit it", b.Label)
 	}
