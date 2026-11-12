@@ -90,3 +90,17 @@ func TestUntarBinaryNeedsBx(t *testing.T) {
 		t.Fatal("an archive without bx must fail")
 	}
 }
+
+func TestLatestReleaseFromNPM(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"name":"@facets-cloud/bx","version":"0.4.1"}`))
+	}))
+	t.Cleanup(srv.Close)
+	old := npmLatestAPI
+	npmLatestAPI = srv.URL
+	t.Cleanup(func() { npmLatestAPI = old })
+	t.Setenv("BX_VIA_NPM", "1")
+	if tag, err := latestRelease(context.Background()); err != nil || tag != "v0.4.1" {
+		t.Fatalf("got %q, %v", tag, err)
+	}
+}

@@ -139,7 +139,7 @@ func (b Browser) WSURL() (string, error) {
 			"cannot read %s's DevToolsActivePort: give your terminal app Full Disk Access (System Settings > Privacy & Security)", b.Label)
 	case errors.Is(err, fs.ErrNotExist):
 		return "", exit.New(exit.Upstream,
-			"%s is not running with remote debugging on: run bx setup, or turn it on at %s", b.Label, b.Inspect)
+			"%s is not running with remote debugging on: turn it on at %s (or quit the browser and run bx setup)", b.Label, b.Inspect)
 	case err != nil:
 		return "", exit.New(exit.Upstream, "read DevToolsActivePort: %v", err)
 	}

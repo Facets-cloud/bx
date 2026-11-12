@@ -123,7 +123,8 @@ func handleMCP(m rpcMsg, tools []mcpTool, byName map[string]mcpTool) rpcMsg {
 }
 
 const mcpInstructions = `bx drives the user's own running browser, in a named profile, with their logins. ` +
-	`If a call fails, run doctor; if remote debugging is off, ask the user to quit the browser, then run setup. ` +
+	`If a call fails, run doctor. If remote debugging is off, ask the user to turn it on at the page doctor names ` +
+	`(such as brave://inspect/#remote-debugging), or, if they would rather you did it, to quit the browser so you can run setup. ` +
 	`Start with list_profiles or list_tabs, then snapshot a tab: each element gets a ref like e12 that ` +
 	`click, fill and the other actions accept. Ask the user before submitting forms, sending messages, ` +
 	`buying or deleting. The first call after the browser starts makes it ask the user to Allow.`
@@ -272,7 +273,7 @@ func readTools() []mcpTool {
 // the CLI. Each runs the CLI command of the same name.
 func setupTools() []mcpTool {
 	return []mcpTool{
-		cliTool("doctor", "Check the browser: installed, profiles readable (Full Disk Access), remote debugging on, connection, bx version. Run this first when something fails.",
+		cliTool("doctor", "Check the browser: installed, profiles readable, remote debugging on (and the page to turn it on), connection, bx version. Run this first when something fails.",
 			cmdDoctor, nil),
 		cliTool("list_browsers", "Each supported browser: installed, running, remote debugging on, connected, and which is the default.",
 			cmdListBrowsers, nil),

@@ -22,6 +22,7 @@ const releaseRepo = "Facets-cloud/bx"
 var (
 	releaseAPI      = "https://api.github.com/repos/" + releaseRepo + "/releases/latest"
 	releaseDownload = "https://github.com/" + releaseRepo + "/releases/download/"
+	npmLatestAPI    = "https://registry.npmjs.org/@facets-cloud%2fbx/latest"
 )
 
 // maxBinary bounds what an update downloads and unpacks.
@@ -47,8 +48,12 @@ func httpGet(ctx context.Context, url string) ([]byte, int, error) {
 	return body, resp.StatusCode, err
 }
 
-// latestRelease returns the newest release tag, such as v0.2.0.
+// latestRelease returns the newest release tag, such as v0.2.0. An npm
+// install asks npm, which is where its updates come from.
 func latestRelease(ctx context.Context) (string, error) {
+	if viaNPM() {
+		return latestNPM(ctx)
+	}
 	body, status, err := httpGet(ctx, releaseAPI)
 	switch {
 	case err != nil:
@@ -65,6 +70,24 @@ func latestRelease(ctx context.Context) (string, error) {
 		return "", errors.New("look up the latest bx release: unexpected answer from GitHub")
 	}
 	return r.Tag, nil
+}
+
+// latestNPM returns the version npm installs for @facets-cloud/bx, as a tag.
+func latestNPM(ctx context.Context) (string, error) {
+	body, status, err := httpGet(ctx, npmLatestAPI)
+	if err == nil && status != http.StatusOK {
+		err = fmt.Errorf("npm answered %d", status)
+	}
+	if err != nil {
+		return "", fmt.Errorf("look up the latest %s: %w", npmPackage, err)
+	}
+	var p struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil || p.Version == "" {
+		return "", errors.New("look up the latest " + npmPackage + ": unexpected answer from npm")
+	}
+	return "v" + p.Version, nil
 }
 
 // fetchBinary downloads the release tarball for asset, checks it against
