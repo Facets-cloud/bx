@@ -116,11 +116,12 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 ### Use it as an MCP server
 
 bx is also a Model Context Protocol server, and MCP can be the only way you
-use it. `bx mcp` serves 22 tools on stdio: setup (`doctor`,
+use it. `bx mcp` serves 28 tools on stdio: setup (`doctor`,
 `list_browsers`, `setup`, `launch`), reading (`list_profiles`,
-`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`) and acting
+`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`), acting
 (`open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`,
-`upload`, `dialog`, `close_tab`). They forward to the same background
+`upload`, `dialog`, `close_tab`) and debugging (`console`, `network`,
+`storage`, `performance`, `emulate`, `cdp`). They forward to the same background
 connection as the CLI, so every client shares one Allow per browser launch.
 
 MCP-only install, with npm (no download step; npx fetches the latest):

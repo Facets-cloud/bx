@@ -49,6 +49,11 @@ logged before that are included):
   bx network <tab> [--errors] [--since <id>] [--limit <n>]
                                     requests with status and timing (default: last 50)
   bx network <tab> --request <id>   one request's headers and bodies
+  bx storage <tab>                  cookies, localStorage and sessionStorage
+  bx performance <tab> [--reload]   Core Web Vitals, slow resources, long frames
+  bx emulate <tab> [--viewport 390x844[@3][,mobile]] [--network offline|slow-3g|fast-3g]
+                   [--cpu <slowdown>] [--geo <lat>,<lon>] [--color dark|light] [--reset]
+                                    each also takes off; lasts until bx stop
 
 Act (each waits for the page to settle and reports navigation, new tabs, dialogs):
   bx open <url> --profile <name>
@@ -160,6 +165,9 @@ var commands = map[string]func(e env) error{
 	"wait":          cmdWait,
 	"console":       cmdConsole,
 	"network":       cmdNetwork,
+	"storage":       cmdStorage,
+	"emulate":       cmdEmulate,
+	"performance":   cmdPerformance,
 	"goto":          cmdGoto,
 	"hover":         cmdHover,
 	"drag":          cmdDrag,

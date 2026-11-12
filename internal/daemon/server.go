@@ -224,6 +224,13 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.front(id)
 	case "goto":
 		return s.goTo(id, a["url"], t)
+	case "storage":
+		return s.storage(id, t)
+	case "emulate":
+		return s.emulate(id, EmulateOptions{Viewport: a["viewport"], Network: a["network"], CPU: a["cpu"],
+			Geo: a["geo"], Color: a["color"], Reset: a["reset"] == "true"}, t)
+	case "performance":
+		return s.performance(id, a["reload"] == "true", t)
 	case "console":
 		return s.consoleList(id, a["errors"] == "true", atoi(a["since"]), atoi(a["limit"]))
 	case "network":

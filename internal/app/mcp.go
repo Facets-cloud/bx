@@ -128,7 +128,9 @@ const mcpInstructions = `bx drives the user's own running browser, in a named pr
 	`(such as brave://inspect/#remote-debugging), or, if they would rather you did it, to quit the browser so you can run setup. ` +
 	`Start with list_profiles or list_tabs, then snapshot a tab: each element gets a ref like e12 that ` +
 	`click, fill and the other actions accept. Ask the user before submitting forms, sending messages, ` +
-	`buying or deleting. The first call after the browser starts makes it ask the user to Allow.`
+	`buying or deleting. The first call after the browser starts makes it ask the user to Allow. ` +
+	`To debug a page, use console and network (pass since with the last id you saw, to see only what an action caused), ` +
+	`then network with request for the failing request's bodies; storage, performance and emulate cover the rest.`
 
 func callTool(params json.RawMessage, byName map[string]mcpTool) map[string]any {
 	var p struct {
@@ -279,6 +281,13 @@ func readTools() []mcpTool {
 			"aren't recorded: goto reload to capture a page load.", "network",
 			withProp(logProps(tab), "request", str("A request id such as n12: return its headers and bodies.")), []string{"tab"},
 			withField(logFields, "request")),
+		opTool("storage", "The cookies, localStorage and sessionStorage the tab's page sees (long values cut).", "storage",
+			map[string]any{"tab": tab}, []string{"tab"}, map[string]string{"tab": "tab"}),
+		opTool("performance", "How the page performs: Core Web Vitals (LCP, CLS, FCP, TTFB) with ratings, load times, "+
+			"long animation frames and the scripts behind them, slowest resources, and runtime counters (heap, DOM nodes). "+
+			"reload measures a fresh load.", "performance",
+			map[string]any{"tab": tab, "reload": boolean("Reload first so the numbers cover a fresh load.")}, []string{"tab"},
+			map[string]string{"tab": "tab", "reload": "reload"}),
 	}
 }
 
@@ -391,6 +400,19 @@ func actTools() []mcpTool {
 			map[string]string{"tab": "tab", "action": "action", "text": "text"}),
 		opTool("close_tab", "Close a tab. Close only tabs you opened.", "close",
 			map[string]any{"tab": tab}, []string{"tab"}, map[string]string{"tab": "tab"}),
+		opTool("emulate", "Change how the tab looks to the page, for testing: viewport (390x844, 390x844@3,mobile), "+
+			"network (offline, slow-3g, fast-3g), cpu (slowdown factor such as 4), geo (lat,lon), color (dark, light). "+
+			"Each also takes off; reset turns all off. Settings last until bx stop.", "emulate",
+			map[string]any{"tab": tab, "viewport": str("WIDTHxHEIGHT[@SCALE][,mobile], or off."),
+				"network": str("offline, slow-3g, fast-3g or off."), "cpu": str("CPU slowdown factor 1-20, or off."),
+				"geo": str("LATITUDE,LONGITUDE, or off. The page still needs the user's location permission."), "color": str("dark, light or off."),
+				"reset": boolean("Turn every emulation off.")}, []string{"tab"},
+			map[string]string{"tab": "tab", "viewport": "viewport", "network": "network", "cpu": "cpu", "geo": "geo", "color": "color", "reset": "reset"}),
+		opTool("cdp", "Send any Chrome DevTools Protocol command, for what the other tools don't cover. "+
+			"With tab, it goes to that tab; without, to the browser. Returns the raw result.", "cdp",
+			map[string]any{"method": str("Such as Page.getLayoutMetrics or Storage.getUsageAndQuota."),
+				"params": map[string]any{"type": "object", "description": "The command's parameters."}, "tab": tab},
+			[]string{"method"}, map[string]string{"method": "method", "params": "params", "tab": "tab"}),
 	}
 }
 

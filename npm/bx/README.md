@@ -40,8 +40,13 @@ an unrelated WebdriverIO tool.
 
    If the page has no remote-debugging switch, update the browser. Older
    versions don't have it.
-2. Restart your MCP app and ask it to run the `doctor` tool to check.
-3. On the first browser action, the browser asks you to Allow the
+2. Give the app that runs the MCP server Full Disk Access (System
+   Settings > Privacy & Security > Full Disk Access): your terminal for
+   Claude Code and Codex, or Claude Desktop or Cursor itself. On recent
+   macOS versions bx can't read the browser's debugging port file without
+   it.
+3. Restart your MCP app and ask it to run the `doctor` tool to check.
+4. On the first browser action, the browser asks you to Allow the
    connection. Click it once. It holds until the browser quits.
 
 Rather not do step 1 by hand? Quit the browser and ask the agent to run
@@ -55,11 +60,29 @@ it back off).
 | Setup | `doctor`, `list_browsers`, `setup`, `launch` |
 | Read | `list_profiles`, `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait` |
 | Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `dialog`, `close_tab` |
+| Debug | `console`, `network`, `storage`, `performance`, `emulate`, `cdp` |
 
 A typical run: `list_profiles`, then `open` a URL in a profile, then
 `snapshot` the tab. The snapshot gives every element a ref like `e12`,
 which `click`, `fill` and the other actions take. Each action reports
 whether the page navigated, opened a tab or showed a dialog.
+
+The debug tools are DevTools for the agent:
+- `console` lists console messages, uncaught exceptions and failed loads,
+  with the file and line.
+- `network` lists requests with status and timing. Pass a request id for
+  its headers and request and response bodies.
+- `storage` shows the page's cookies, localStorage and sessionStorage.
+- `performance` reports Core Web Vitals (LCP, CLS, FCP, TTFB) with
+  ratings, the long tasks and the scripts behind them, the slowest
+  resources, and heap and DOM size.
+- `emulate` sets a phone viewport, slow 3G or offline, a slower CPU, a
+  location, or dark mode.
+- `cdp` sends any other DevTools Protocol command.
+
+So "log in to staging, add an item, check out, and tell me why it fails"
+ends with the agent reading the failing request's response body and the
+exception's file and line.
 
 ## How the one Allow works
 

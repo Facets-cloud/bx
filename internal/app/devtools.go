@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -127,4 +128,100 @@ func printHeaders(e env, title string, h map[string]any) {
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(s, "\n")
 	return line
+}
+
+// cmdStorage prints the cookies and web storage the tab's page sees.
+func cmdStorage(e env) error {
+	if err := need(e.pos, 1, "bx storage <tab>"); err != nil {
+		return err
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	var st daemon.Storage
+	if err := e.call("storage", map[string]string{"tab": e.pos[0], "timeout": t}, &st); err != nil {
+		return err
+	}
+	if e.o.json {
+		e.o.printJSON(st)
+		return nil
+	}
+	rows := make([][]string, 0, len(st.Cookies))
+	for _, c := range st.Cookies {
+		flags := strings.TrimSpace(strings.Join([]string{onOff(c.HTTPOnly, "httponly"), onOff(c.Secure, "secure"), c.SameSite}, " "))
+		rows = append(rows, []string{c.Name, clip(c.Value, 40), c.Domain, c.Expires, flags})
+	}
+	fmt.Fprintf(e.o.w, "%s\n\ncookies:\n", st.URL)
+	e.o.table([]string{"NAME", "VALUE", "DOMAIN", "EXPIRES", "FLAGS"}, rows)
+	for _, part := range []struct {
+		name string
+		m    map[string]string
+	}{{"localStorage", st.Local}, {"sessionStorage", st.Session}} {
+		fmt.Fprintf(e.o.w, "\n%s (%d keys):\n", part.name, len(part.m))
+		for _, k := range slices.Sorted(maps.Keys(part.m)) {
+			fmt.Fprintf(e.o.w, "  %s = %s\n", k, clip(part.m[k], 80))
+		}
+	}
+	return nil
+}
+
+func onOff(on bool, word string) string {
+	if on {
+		return word
+	}
+	return ""
+}
+
+// cmdEmulate changes viewport, network, CPU, location or color scheme.
+func cmdEmulate(e env) error {
+	if err := need(e.pos, 1, "bx emulate <tab> [--viewport WxH[@scale][,mobile]] [--network ...] [--cpu N] [--geo lat,lon] [--color dark|light] [--reset]"); err != nil {
+		return err
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	args := map[string]string{"tab": e.pos[0], "timeout": t}
+	for _, f := range []string{"viewport", "network", "cpu", "geo", "color"} {
+		args[f] = e.a.flags[f]
+	}
+	if e.a.has("reset") {
+		args["reset"] = "true"
+	}
+	var done map[string]string
+	if err := e.call("emulate", args, &done); err != nil {
+		return err
+	}
+	switch {
+	case e.o.quiet:
+	case e.o.json:
+		e.o.printJSON(done)
+	default:
+		for _, k := range slices.Sorted(maps.Keys(done)) {
+			fmt.Fprintf(e.o.w, "%s: %s\n", k, done[k])
+		}
+	}
+	return nil
+}
+
+// cmdPerformance prints the page's load and runtime performance as JSON.
+func cmdPerformance(e env) error {
+	if err := need(e.pos, 1, "bx performance <tab> [--reload]"); err != nil {
+		return err
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	args := map[string]string{"tab": e.pos[0], "timeout": t}
+	if e.a.has("reload") {
+		args["reload"] = "true"
+	}
+	var report json.RawMessage
+	if err := e.call("performance", args, &report); err != nil {
+		return err
+	}
+	e.o.printJSON(report)
+	return nil
 }

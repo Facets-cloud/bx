@@ -13,6 +13,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/performance"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
@@ -85,8 +86,13 @@ func (s *server) attach(id target.ID) (*tabSession, error) {
 			if _, err := cdp.Call(ctx, t, emulation.SetFocusEmulationEnabled, emulation.SetFocusEmulationEnabledParams{Enabled: true}); err != nil {
 				return err
 			}
-			_, err := cdp.Call(ctx, t, page.Enable, page.EnableParams{})
-			return err
+			if _, err := cdp.Call(ctx, t, page.Enable, page.EnableParams{}); err != nil {
+				return err
+			}
+			// Runtime counters (script, layout, style time) count only
+			// while the Performance domain is on; best effort.
+			_, _ = cdp.Call(ctx, t, performance.Enable, performance.EnableParams{})
+			return nil
 		}))
 		done <- err
 	}()

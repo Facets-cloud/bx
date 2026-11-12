@@ -16,13 +16,14 @@ var valueFlags = map[string]string{
 	"--out": "out", "--tab": "tab", "--timeout": "timeout",
 	"--text": "text", "--submit": "submit", "--file": "file",
 	"--since": "since", "--limit": "limit", "--request": "request",
+	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",
 }
 
 var boolFlags = map[string]string{
 	"-q": "quiet", "--quiet": "quiet",
 	"--yes": "yes", "--full": "full", "--double": "double", "--gone": "gone", "--check": "check", "--off": "off",
-	"--errors": "errors",
-	"-h":       "help", "--help": "help",
+	"--errors": "errors", "--reset": "reset", "--reload": "reload",
+	"-h": "help", "--help": "help",
 }
 
 // args is a parsed command line: positional words and flags, which may

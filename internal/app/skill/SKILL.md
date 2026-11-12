@@ -56,6 +56,13 @@ bx dialog <tab> accept|dismiss [--text <reply>]
 bx front <tab>
 bx close tab <id> --yes
 bx cdp <Method> [<json-params>] [--tab <id>]
+bx console <tab> [--errors] [--since <id>] [--limit <n>]   # console, exceptions, failed loads
+bx network <tab> [--errors] [--since <id>] [--limit <n>]   # requests: status, type, time
+bx network <tab> --request <id>           # one request's headers and bodies
+bx storage <tab>                          # cookies, localStorage, sessionStorage
+bx performance <tab> [--reload]           # Web Vitals, long frames, slow resources
+bx emulate <tab> [--viewport 390x844@3,mobile] [--network offline|slow-3g|fast-3g]
+          [--cpu 4] [--geo <lat>,<lon>] [--color dark|light] [--reset]
 bx status | bx stop | bx doctor | bx setup | bx launch
 bx list browsers                          # installed, running, debugging on, default
 bx use <browser>                          # set the default browser
@@ -107,12 +114,31 @@ that profile the first time, to learn which tabs belong to it. In
 `bx list tabs` without `--profile`, PROFILE shows `?` for tabs in profiles
 bx hasn't seen yet.
 
+## Debugging a page
+
+bx records each tab's console and network from the first time it touches
+the tab (and replays console messages from before). To find why something
+breaks:
+
+1. Note where the logs end: `bx console "$id" -o json --limit 1` gives the
+   last id; do the same for `bx network`.
+2. Do the steps that fail (click, fill, ...).
+3. `bx console "$id" --errors --since <id>` and
+   `bx network "$id" --errors --since <id>` show only what those steps
+   caused. `bx network "$id" --request n12` shows the failing request's
+   request and response bodies, which usually name the cause.
+
+Requests made before bx touched the tab aren't recorded: `bx goto "$id"
+reload` to capture a page load. `bx emulate` lasts until `bx stop`; run
+`bx emulate "$id" --reset` when done.
+
 ## Escape hatch
 
 `bx cdp` sends any DevTools Protocol method over the same connection and
 prints the raw JSON result. Without `--tab` it goes to the browser (Target.*,
 Browser.*); with `--tab` it goes to that page (Page.*, Runtime.*, DOM.*).
-Use it for what bx has no command for, such as network or performance data.
+Use it for what bx has no command for, such as Lighthouse-style audits or
+DOM breakpoints.
 
 ## When something fails
 
