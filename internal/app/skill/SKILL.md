@@ -23,6 +23,8 @@ action as something the user did with their own hands.
   browser. Tell the user to click it. Later commands reuse that connection.
 - If remote debugging is off (exit 3 saying so), ask the user to quit the
   browser, then run `bx setup`. Never quit their browser yourself.
+- If the user names a browser ("in Chrome"), pass `--browser chrome`. Check
+  `bx list browsers` when unsure which one bx will drive.
 - `--browser <name>-agent` (or `BX_BROWSER`) drives a separate agent browser
   started with `bx launch`: no Allow dialog, but its own logins. Use it only
   when the user set it up or asks for it.
@@ -55,6 +57,8 @@ bx front <tab>
 bx close tab <id> --yes
 bx cdp <Method> [<json-params>] [--tab <id>]
 bx status | bx stop | bx doctor | bx setup | bx launch
+bx list browsers                          # installed, running, debugging on, default
+bx use <browser>                          # set the default browser
 ```
 
 An `<el>` is a ref from the tab's latest `bx snapshot` (such as `e12`) or

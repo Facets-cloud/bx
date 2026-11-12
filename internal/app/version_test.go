@@ -82,3 +82,25 @@ func TestCachedLatestUsesFreshCache(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestChooseBrowserOrder(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("BX_BROWSER", "")
+	if err := saveConfig(config{Browser: "chrome"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := chooseBrowser(""); b.Name != "chrome" {
+		t.Errorf("saved default: got %s", b.Name)
+	}
+	t.Setenv("BX_BROWSER", "edge")
+	if b, _ := chooseBrowser(""); b.Name != "edge" {
+		t.Errorf("env beats saved default: got %s", b.Name)
+	}
+	if b, _ := chooseBrowser("vivaldi"); b.Name != "vivaldi" {
+		t.Errorf("flag beats env: got %s", b.Name)
+	}
+	t.Setenv("BX_BROWSER", "netscape")
+	if _, err := chooseBrowser(""); err == nil {
+		t.Error("an unknown browser must fail")
+	}
+}

@@ -20,6 +20,8 @@ Setup:
   bx setup                          turn on remote debugging in the browser (quit it first)
   bx launch                         start a separate agent browser: no setup, no Allow
                                     prompts, its own logins (then use --browser <name>-agent)
+  bx list browsers                  each supported browser: installed, running, debugging on
+  bx use <browser>                  make it the default (see --browser below)
   bx doctor                         check the browser, permissions, daemon and skill
   bx skill install|update           install the agent skill for Claude Code and Codex
   bx update [--check]               upgrade bx and its skill from the latest release
@@ -65,7 +67,8 @@ Global flags:
   --yes             confirm a destructive action
   --browser <name>  browser to drive (%s, or <name>-agent
                     for the one bx launch starts); default: $BX_BROWSER, else
-                    the one with remote debugging on, else brave
+                    the one set by bx use, else the one with remote
+                    debugging on, else brave
   --profile <name>  profile display name or folder name, exact match
   --timeout <dur>   how long to wait on the page (default 30s)
 
@@ -96,15 +99,9 @@ func Run(argv []string) int {
 		return 0
 	}
 	daemon.Version = Version
-	b := browser.Detect()
-	name := a.flags["browser"]
-	if name == "" {
-		name = os.Getenv("BX_BROWSER")
-	}
-	if name != "" {
-		if b, err = browser.Lookup(name); err != nil {
-			return o.fail(err)
-		}
+	b, err := chooseBrowser(a.flags["browser"])
+	if err != nil {
+		return o.fail(err)
 	}
 	switch a.pos[0] {
 	case "version", "skill", "update", "__daemon":
@@ -131,6 +128,8 @@ var commands = map[string]func(e env) error{
 	"skill update":  cmdSkillInstall,
 	"update":        cmdUpdate,
 	"setup":         cmdSetup,
+	"list browsers": cmdListBrowsers,
+	"use":           cmdUse,
 	"launch":        cmdLaunch,
 	"list profiles": cmdListProfiles,
 	"list tabs":     cmdListTabs,

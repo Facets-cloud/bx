@@ -121,9 +121,11 @@ everyday profiles: sign in there to what agents need. Drive it with
 --browser brave-agent` quits it. Without the Allow dialog, any program on
 your Mac can drive it, so keep its logins to what agents need.
 
-Supported: Brave (tested), Chrome, Chromium, Edge, Arc and Vivaldi (same
-layout, not yet tested). bx drives `$BX_BROWSER`, else whichever one has
-remote debugging on; pass `--browser <name>` to choose. Adding a Chromium browser means adding
+Supported: Brave and Chrome (tested), Chromium, Edge, Arc and Vivaldi
+(same layout, not yet tested). `bx list browsers` shows which are
+installed, running and have debugging on; `bx use chrome` makes one the
+default. bx drives `--browser <name>`, else `$BX_BROWSER`, else the
+`bx use` default, else the first with remote debugging on. Adding a Chromium browser means adding
 one entry to the table in `internal/browser/browser.go`.
 
 ## Security
