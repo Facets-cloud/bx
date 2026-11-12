@@ -42,6 +42,14 @@ Read:
   bx eval <tab> '<js>' | --file <script.js>
   bx wait <tab> --text <text> | --selector <el> [--gone]
 
+Debug (recorded from the first time bx touches the tab; console messages
+logged before that are included):
+  bx console <tab> [--errors] [--since <id>] [--limit <n>]
+                                    console messages, uncaught errors, failed loads
+  bx network <tab> [--errors] [--since <id>] [--limit <n>]
+                                    requests with status and timing (default: last 50)
+  bx network <tab> --request <id>   one request's headers and bodies
+
 Act (each waits for the page to settle and reports navigation, new tabs, dialogs):
   bx open <url> --profile <name>
   bx goto <tab> <url|back|forward|reload>
@@ -150,6 +158,8 @@ var commands = map[string]func(e env) error{
 	"snapshot":      cmdSnapshot,
 	"eval":          cmdEval,
 	"wait":          cmdWait,
+	"console":       cmdConsole,
+	"network":       cmdNetwork,
 	"goto":          cmdGoto,
 	"hover":         cmdHover,
 	"drag":          cmdDrag,

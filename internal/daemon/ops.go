@@ -168,6 +168,8 @@ func (s *server) open(profileRef, rawURL string, timeout time.Duration) (Tab, er
 	if err != nil {
 		return Tab{}, err
 	}
+	// Attach now so console and network records cover the page load.
+	_, _ = s.session(string(t.TargetID))
 	title := ""
 	if !strings.HasPrefix(rawURL, "about:") {
 		title = s.waitLoaded(t.TargetID, timeout)

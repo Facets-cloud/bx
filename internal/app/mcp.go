@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -226,6 +227,9 @@ func schema(props map[string]any, required []string) map[string]any {
 }
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+func integer(desc string) map[string]any {
+	return map[string]any{"type": "integer", "minimum": 0, "description": desc}
+}
 func boolean(desc string) map[string]any {
 	return map[string]any{"type": "boolean", "description": desc}
 }
@@ -266,7 +270,33 @@ func readTools() []mcpTool {
 		opTool("wait", "Wait until text appears, or an element is visible (or, with gone, is not).", "wait",
 			map[string]any{"tab": tab, "text": str("Text to wait for."), "selector": el, "gone": boolean("Wait for it to disappear.")},
 			[]string{"tab"}, map[string]string{"tab": "tab", "text": "text", "selector": "selector", "gone": "gone"}),
+		opTool("console", "The tab's console messages, uncaught exceptions and failed loads, with where they came from. "+
+			"Recorded from the first time bx touched the tab (earlier console messages are included). "+
+			"To catch only what an action causes, note the last id first and pass it as since.", "console",
+			logProps(tab), []string{"tab"}, logFields),
+		opTool("network", "The tab's network requests: method, URL, status, type, time. Pass request (an id such as n12) "+
+			"for that request's headers, request body and response body. Requests made before bx touched the tab "+
+			"aren't recorded: goto reload to capture a page load.", "network",
+			withProp(logProps(tab), "request", str("A request id such as n12: return its headers and bodies.")), []string{"tab"},
+			withField(logFields, "request")),
 	}
+}
+
+func logProps(tab map[string]any) map[string]any {
+	return map[string]any{"tab": tab,
+		"errors": boolean("Only errors and warnings (console) or failed and 4xx/5xx requests (network)."),
+		"since":  integer("Only entries with an id after this one."),
+		"limit":  integer("At most this many of the newest entries. Default 50.")}
+}
+
+var logFields = map[string]string{"tab": "tab", "errors": "errors", "since": "since", "limit": "limit"}
+
+func withProp(m map[string]any, k string, v any) map[string]any { m[k] = v; return m }
+
+func withField(m map[string]string, k string) map[string]string {
+	c := maps.Clone(m)
+	c[k] = k
+	return c
 }
 
 // setupTools let an MCP-only user check and prepare the browser without

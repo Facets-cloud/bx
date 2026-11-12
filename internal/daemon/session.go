@@ -37,6 +37,8 @@ type tabSession struct {
 
 	refs      map[string]cdp.BackendNodeID
 	refLoader cdp.LoaderID
+
+	log *devLog // console and network activity, from the moment bx attached
 }
 
 // Dialog is a JavaScript alert, confirm, prompt or beforeunload dialog.
@@ -72,8 +74,10 @@ func (s *server) session(id string) (*tabSession, error) {
 
 func (s *server) attach(id target.ID) (*tabSession, error) {
 	// WithDetachOnCancel: ending the context detaches, it never closes the tab.
-	tctx, cancel := chromedp.NewContext(s.ctx, chromedp.WithTargetID(id), chromedp.WithDetachOnCancel())
-	sess := &tabSession{id: id, ctx: tctx, cancel: cancel}
+	l := newDevLog()
+	tctx, cancel := chromedp.NewContext(s.ctx, chromedp.WithTargetID(id), chromedp.WithDetachOnCancel(),
+		chromedp.WithListener(l.listen))
+	sess := &tabSession{id: id, ctx: tctx, cancel: cancel, log: l}
 	done := make(chan error, 1)
 	go func() {
 		_, err := chromedp.Run(tctx, chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {

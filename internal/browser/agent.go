@@ -212,5 +212,13 @@ func (b Browser) QuitAgent() (bool, error) {
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return false, exit.New(exit.Upstream, "quit %s: %v", b.Label, err)
 	}
+	// Wait for it to exit, so a bx launch right after starts a new one
+	// instead of finding this one still shutting down.
+	for i := 0; i < 100 && b.Running(); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if b.Running() {
+		return true, exit.New(exit.Upstream, "%s is still shutting down after 10s", b.Label)
+	}
 	return true, nil
 }

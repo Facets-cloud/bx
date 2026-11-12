@@ -224,6 +224,13 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.front(id)
 	case "goto":
 		return s.goTo(id, a["url"], t)
+	case "console":
+		return s.consoleList(id, a["errors"] == "true", atoi(a["since"]), atoi(a["limit"]))
+	case "network":
+		if a["request"] != "" {
+			return s.networkRequest(id, a["request"], t)
+		}
+		return s.networkList(id, a["errors"] == "true", atoi(a["since"]), atoi(a["limit"]))
 	}
 	return nil, exit.New(exit.Validation, "unknown daemon op %q", op)
 }
