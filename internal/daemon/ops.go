@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 
@@ -151,20 +152,7 @@ func (s *server) open(profileRef, rawURL string, timeout time.Duration) (Tab, er
 	if probe != "" {
 		defer s.closeTarget(probe)
 	}
-	before, err := s.pages()
-	if err != nil {
-		return Tab{}, err
-	}
-	seen := map[target.ID]bool{}
-	for _, t := range before {
-		seen[t.TargetID] = true
-	}
-	if err := s.b.Launch(p.Dir, rawURL); err != nil {
-		return Tab{}, err
-	}
-	t, err := s.waitFor(func(t *target.Info) bool {
-		return !seen[t.TargetID] && t.TargetID != probe && t.BrowserContextID == ctxID
-	})
+	t, err := s.openTab(ctxID, probe, p.Dir, rawURL)
 	if err != nil {
 		return Tab{}, err
 	}
@@ -248,13 +236,13 @@ func (s *server) read(id, el, format string, timeout time.Duration) (Content, er
 		return Content{}, err
 	}
 	defer sess.mu.Unlock()
-	sel, err := sess.selector(sess.ctx, el)
+	e, err := sess.element(sess.ctx, el)
 	if err != nil {
 		return Content{}, err
 	}
-	a := chromedp.Text(chromedp.CSS(sel))
+	a := chromedp.Text(e.q())
 	if format == "html" {
-		a = chromedp.OuterHTML(chromedp.CSS(sel))
+		a = chromedp.OuterHTML(e.q())
 	}
 	v, err := run(sess, timeout, a)
 	return Content{Selector: el, Format: format, Content: v}, tabErr(err, "read", el, timeout)
@@ -281,18 +269,22 @@ func (s *server) screenshot(id, el string, full bool, timeout time.Duration) (Im
 		return Image{}, err
 	}
 	defer sess.mu.Unlock()
+	_, _ = run(sess, timeout, chromedp.Evaluate[chromedp.Void](removeIndicatorJS))
 	a := chromedp.CaptureScreenshot()
 	switch {
 	case el != "":
-		sel, err := sess.selector(sess.ctx, el)
+		e, err := sess.element(sess.ctx, el)
 		if err != nil {
 			return Image{}, err
 		}
-		a = chromedp.Screenshot(chromedp.CSS(sel))
+		a = chromedp.Screenshot(e.q())
 	case full:
-		a = chromedp.FullScreenshot(100)
+		a = fullScreenshot
 	}
 	png, err := run(sess, timeout, a)
+	if err == nil {
+		sess.say(sess.ctx, "Took a screenshot") // after the capture, so the image leaves it out
+	}
 	return Image{PNG: png}, tabErr(err, "screenshot", el, timeout)
 }
 
@@ -339,4 +331,57 @@ func (s *server) cdp(tab, method, params string, timeout time.Duration) (json.Ra
 		return nil, upstream(method, err)
 	}
 	return res, nil
+}
+
+// openTab opens rawURL in a new tab, in front, of the profile whose
+// context is ctxID. It first asks the browser over the protocol, which
+// Chromium allows only in the profile it treats as current; otherwise it
+// opens the URL the way a link from another app would.
+func (s *server) openTab(ctxID cdp.BrowserContextID, probe target.ID, dir, rawURL string) (*target.Info, error) {
+	res, err := chromedp.CallBrowser(s.ctx, target.CreateTarget, target.CreateTargetParams{
+		URL: rawURL, BrowserContextID: ctxID})
+	if err == nil {
+		return s.waitFor(func(t *target.Info) bool { return t.TargetID == res.TargetID })
+	}
+	before, err := s.pages()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[target.ID]bool{}
+	for _, t := range before {
+		seen[t.TargetID] = true
+	}
+	if err := s.b.Launch(dir, rawURL); err != nil {
+		return nil, err
+	}
+	return s.waitFor(func(t *target.Info) bool {
+		return !seen[t.TargetID] && t.TargetID != probe && t.BrowserContextID == ctxID
+	})
+}
+
+// maxCapture is the tallest image, in device pixels, that Chromium will
+// capture in one piece (its texture limit is 16384).
+const maxCapture = 16000
+
+// fullScreenshot captures the whole page, scaled down when the page is
+// too tall to capture at full resolution.
+func fullScreenshot(ctx context.Context, t *chromedp.Target) ([]byte, error) {
+	size, err := chromedp.Evaluate[[]float64](`[document.documentElement.scrollWidth, document.documentElement.scrollHeight, devicePixelRatio]`)(ctx, t)
+	if err != nil || len(size) != 3 {
+		return nil, upstream("measure page", err)
+	}
+	w, h, dpr := size[0], size[1], size[2]
+	scale := 1.0
+	if longest := max(w, h) * dpr; longest > maxCapture {
+		scale = maxCapture / longest
+	}
+	yes := true
+	r, err := cdp.Call(ctx, t, page.CaptureScreenshot, page.CaptureScreenshotParams{
+		Format: page.CaptureScreenshotFormatPng, CaptureBeyondViewport: &yes, FromSurface: &yes,
+		Clip: &page.Viewport{X: 0, Y: 0, Width: w, Height: h, Scale: scale},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r.Data, nil
 }

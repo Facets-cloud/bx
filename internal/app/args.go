@@ -13,7 +13,7 @@ var valueFlags = map[string]string{
 	"-o": "output", "--output": "output",
 	"--browser": "browser", "--profile": "profile",
 	"--selector": "selector", "--format": "format",
-	"--out": "out", "--tab": "tab", "--timeout": "timeout",
+	"--out": "out", "--tab": "tab", "--timeout": "timeout", "--within": "within", "--into": "into", "--blur": "blur", "--mode": "mode", "--typing": "typing",
 	"--text": "text", "--submit": "submit", "--file": "file",
 	"--since": "since", "--limit": "limit", "--request": "request",
 	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",
@@ -22,7 +22,7 @@ var valueFlags = map[string]string{
 var boolFlags = map[string]string{
 	"-q": "quiet", "--quiet": "quiet",
 	"--yes": "yes", "--full": "full", "--double": "double", "--gone": "gone", "--check": "check", "--off": "off",
-	"--errors": "errors", "--reset": "reset", "--reload": "reload",
+	"--errors": "errors", "--reset": "reset", "--reload": "reload", "--interactive": "interactive",
 	"-h": "help", "--help": "help",
 }
 

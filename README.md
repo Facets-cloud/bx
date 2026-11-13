@@ -17,9 +17,10 @@ same remote debugging on every OS, so ports are welcome.
 ```sh
 bx list profiles
 id=$(bx open https://example.com --profile Work -o json | jq -r .id)
-bx snapshot "$id"                      # elements with refs: e12 button "Save"
+bx snapshot "$id" --interactive        # what can be clicked or typed in: e12 button "Save"
 bx fill "$id" e4 'hello' e7 Green e9 true
-bx click "$id" e12                     # reports navigation, new tabs, dialogs
+bx click "$id" 'button "Save"'         # reports navigation, new tabs, dialogs, changes
+bx batch "$id" --file steps.json       # many steps in one call
 bx eval "$id" '() => document.title'
 bx screenshot "$id" --out page.png
 ```
@@ -46,12 +47,108 @@ navigates. After each action bx waits the way a person would: for a
 navigation the action started to finish loading, then for the page to go
 100ms without changing.
 
-The DevTools Protocol can't open a tab in a chosen profile:
-`Target.createTarget` works only for the last-focused one. So bx asks the
-browser to open the page with `--profile-directory`, then finds the new
-tab. Tabs don't say which profile they belong to, so the first time bx
+The DevTools Protocol can open a tab only in the profile the browser
+treats as current (`Target.createTarget` fails for the others). bx uses it
+there. For any other profile bx asks the browser to open the page with
+`--profile-directory`, then finds the new tab. Tabs don't say which profile they belong to, so the first time bx
 needs a profile's tabs it opens a `data:` page carrying a random nonce in
 that profile, reads which context the page landed in, and closes it.
+
+## Watch mode and fast mode
+
+bx works in one of two modes. Both use the same browser, profiles and
+logins, open new tabs in front, scroll what they act on into view, and
+send real mouse and keyboard events, the kind a page can't tell from
+yours. In both, a pointer with a "bx" tag shows where bx is acting. The
+tag says what it is doing ("Click "Next"", "Paste 74 characters", "Read
+the page", "Wait for "Saved"") and, in a batch, which step it is on
+("7/32"). A click shows a ripple.
+
+**Fast mode** is the default. The pointer jumps to each element and each
+step runs as soon as the page settles.
+
+**Watch mode** is for when you want to follow along: the pointer glides
+along a curve and the real mouse travels with it, clicks land near the
+middle rather than on it, a native dropdown is shown unfolding to the
+choice, and batch steps pause briefly. A 32-step form took 8s in fast mode
+and 50s in watch mode.
+
+**Typing.** bx pastes text in one go by default. The page gets the same
+events as a paste, which plain fields, rich text editors and
+autocompletes all accept. Some sites react only to individual key
+presses; for those bx can type key by key, at human pace in watch mode.
+
+### Choosing: just ask your agent
+
+Say it in the request: "let me watch", "go slowly so I can follow",
+"this site ignores pasted text, type it". The agent passes `mode` and
+`typing` to bx's `start` tool for that task, and can call `start` again
+to change them halfway through. Nothing to configure.
+
+### Sessions
+
+Each agent's work is a session. The agent opens it with `start`, giving a
+title such as "Onboard Lumen Analytics"; between its calls the pointer
+shows "Working on: Onboard Lumen Analytics". It closes the session with
+`done` and a one-line summary: the pointer shows "Done" and the summary,
+then goes away, and `done` returns how long the task took, how many
+actions it ran and the tabs it opened. Those tabs stay open unless the
+agent closes them. A session can act on any tab in any profile. An agent
+that skips `start` gets an untitled session on its first command; if one
+never calls `done`, its pointer goes away 20 seconds after its last
+command (2 minutes for a titled session), or when its MCP connection
+ends. CLI agents use `bx start "<title>"` and `bx done "<summary>"`.
+
+### Defaults, for power users
+
+To change what bx does when the agent doesn't say, set environment
+variables where the agent starts bx. A request's `start` settings still
+win.
+
+| Variable | Values | Default |
+| --- | --- | --- |
+| `BX_MODE` | `fast`, `watch` | `fast` |
+| `BX_TYPING` | `paste`, `keys` | `paste` |
+| `BX_BROWSER` | `brave`, `chrome`, `brave-agent`, ... | see `bx use` |
+
+Claude Code: `claude mcp add -s user bx -e BX_MODE=watch -- npx -y @facets-cloud/bx mcp`
+(run `claude mcp remove bx -s user` first to change an existing install).
+Codex, in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.bx]
+command = "npx"
+args = ["-y", "@facets-cloud/bx", "mcp"]
+env = { BX_MODE = "watch" }
+```
+
+Claude Desktop, Cursor and other MCP apps take an `env` object in the
+server entry. The CLI reads your shell: `export BX_MODE=watch`. Restart
+the agent app after changing its config.
+
+## Fewer calls, faster runs
+
+Most of an agent's time goes to its own turns: reading the page and
+deciding what to do. bx is built to need fewer of them.
+
+- `snapshot --interactive` lists only what can be clicked or typed in,
+  plus headings. On a Wikipedia article that is 29 KB instead of 155 KB.
+  `--within e12` shows one part of the page.
+- An element can be a ref (`e12`), a role and name the way a snapshot
+  shows it (`button "Next"`, `textbox "Email" #2` for the second), or a
+  CSS selector. A role and name waits up to 10s for the element to
+  appear. An agent can therefore plan screens it hasn't seen yet.
+- `batch` runs steps in one call (`click`, `fill`, `type`, `key`, `hover`,
+  `goto`, `wait`, `upload`, `scroll`). It stops at the first failure and
+  says which step failed. A six-step signup wizard ran as one 32-step
+  batch.
+- Every action reports `changes`: what appeared (`+ e61 button "Next"`),
+  disappeared (`- e40`) or changed (`~ e27 combobox value="India"`). After a
+  big change or a new page it returns the new screen instead. Refs stay
+  the same while an element stays on the page, so a new snapshot is rarely
+  needed.
+- Elements inside shadow roots (web components, many post composers) work
+  like any other.
 
 ## Install (macOS)
 
@@ -71,8 +168,6 @@ browser and in System Settings.
    `checksums.txt` with `shasum -a 256 -c --ignore-missing checksums.txt`.
    Both files are at
    `https://github.com/Facets-cloud/bx/releases/latest/download/<file>`.
-   While the repo is private those URLs answer 404; use the GitHub CLI
-   instead: `gh release download --repo Facets-cloud/bx --pattern 'bx_darwin_<arch>.tar.gz' --pattern checksums.txt`.
 2. Unpack it and put `bx` on the PATH, in `~/.local/bin` if that is on the
    PATH, else `/usr/local/bin`. Remove macOS's quarantine flag:
    `xattr -d com.apple.quarantine <path>/bx 2>/dev/null || true`.
@@ -122,11 +217,11 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 ### Use it as an MCP server
 
 bx is also a Model Context Protocol server, and MCP can be the only way you
-use it. `bx mcp` serves 28 tools on stdio: setup (`doctor`,
+use it. `bx mcp` serves 31 tools on stdio: setup (`doctor`,
 `list_browsers`, `setup`, `launch`), reading (`list_profiles`,
 `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`), acting
 (`open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`,
-`upload`, `dialog`, `close_tab`) and debugging (`console`, `network`,
+`upload`, `dialog`, `close_tab`, `batch`, `start`, `done`) and debugging (`console`, `network`,
 `storage`, `performance`, `emulate`, `cdp`). They forward to the same background
 connection as the CLI, so every client shares one Allow per browser launch.
 
@@ -158,7 +253,9 @@ Or paste this into any agent: *Install bx from
 https://github.com/Facets-cloud/bx as an MCP server.*
 
 To pin a browser, give the server an environment variable, for example
-`"env": {"BX_BROWSER": "chrome"}`, or pass `browser` in a tool call.
+`"env": {"BX_BROWSER": "chrome"}`, or pass `browser` in a tool call. The
+same `env` takes `BX_MODE` and `BX_TYPING` (see
+[Watch mode and fast mode](#watch-mode-and-fast-mode)).
 
 Any other client: a stdio server with command `/full/path/to/bx` and args
 `["mcp"]` (desktop apps don't see your shell's PATH).

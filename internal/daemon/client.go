@@ -64,6 +64,26 @@ func paths(browser string) (sock, lock, log string, err error) {
 // into out (when non-nil). With start set, it starts the daemon first if
 // none is running.
 func Call(browser string, req Request, out any, start bool) error {
+	if req.Args == nil {
+		req.Args = map[string]string{}
+	}
+	if req.Args["session"] == "" {
+		req.Args["session"] = sessionID()
+	}
+	if os.Getenv("BX_TYPING") == "keys" {
+		// Type key by key instead of pasting text in one go.
+		if req.Args == nil {
+			req.Args = map[string]string{}
+		}
+		req.Args["typing"] = "keys"
+	}
+	if os.Getenv("BX_MODE") == "watch" {
+		// Watch mode: an on-page pointer narrates each action, at human pace.
+		if req.Args == nil {
+			req.Args = map[string]string{}
+		}
+		req.Args["mode"] = "watch"
+	}
 	if os.Getenv("BX_FOLLOW") == "1" {
 		// Bring each tab bx works in to the front, so the user can watch.
 		if req.Args == nil {
@@ -204,4 +224,19 @@ func errorResponse(err error) Response {
 		return Response{Error: e.Msg, Code: e.Code}
 	}
 	return Response{Error: fmt.Sprint(err), Code: exit.Upstream}
+}
+
+// SessionID names the agent session this process's requests belong to.
+// The MCP server sets one per connection; the CLI uses $BX_SESSION, or
+// one shared session when it is unset.
+var SessionID string
+
+func sessionID() string {
+	if SessionID != "" {
+		return SessionID
+	}
+	if id := os.Getenv("BX_SESSION"); id != "" {
+		return id
+	}
+	return "cli"
 }

@@ -85,10 +85,10 @@ func cmdFill(e env) error {
 }
 
 func cmdType(e env) error {
-	if err := need(e.pos, 2, "bx type <tab> <text> [--submit <key>]"); err != nil {
+	if err := need(e.pos, 2, "bx type <tab> <text> [--into <el>] [--submit <key>]"); err != nil {
 		return err
 	}
-	return actCall(e, "type", map[string]string{"tab": e.pos[0], "text": e.pos[1], "submit": e.a.flags["submit"]}, "typed")
+	return actCall(e, "type", map[string]string{"tab": e.pos[0], "selector": e.a.flags["into"], "text": e.pos[1], "submit": e.a.flags["submit"]}, "typed")
 }
 
 func cmdKey(e env) error {
@@ -146,7 +146,7 @@ func cmdFront(e env) error {
 }
 
 func cmdSnapshot(e env) error {
-	if err := need(e.pos, 1, "bx snapshot <tab> [--out <file>]"); err != nil {
+	if err := need(e.pos, 1, "bx snapshot <tab> [--interactive] [--within <ref>] [--out <file>]"); err != nil {
 		return err
 	}
 	t, err := e.a.timeout()
@@ -155,6 +155,9 @@ func cmdSnapshot(e env) error {
 	}
 	var s daemon.Snapshot
 	if err := e.call("snapshot", map[string]string{"tab": e.pos[0], "timeout": t}, &s); err != nil {
+		return err
+	}
+	if s, err = s.Filter(e.a.flags["within"], e.a.has("interactive")); err != nil {
 		return err
 	}
 	text := s.Text()
@@ -229,5 +232,36 @@ func cmdWait(e env) error {
 		return err
 	}
 	e.o.done("condition met")
+	return nil
+}
+
+// cmdBatch runs a JSON list of steps on one tab in one call.
+func cmdBatch(e env) error {
+	usage := `usage: bx batch <tab> '[{"action":"click","element":"e12"}, ...]' | bx batch <tab> --file <steps.json>`
+	steps := ""
+	switch file := e.a.flags["file"]; {
+	case file == "" && len(e.pos) == 2:
+		steps = e.pos[1]
+	case file != "" && len(e.pos) == 1:
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return exit.New(exit.User, "read %s: %v", file, err)
+		}
+		steps = string(b)
+	default:
+		return exit.New(exit.Validation, "%s", usage)
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	var res daemon.BatchResult
+	if err := e.call("batch", map[string]string{"tab": e.pos[0], "steps": steps, "timeout": t}, &res); err != nil {
+		return err
+	}
+	e.o.printJSON(res)
+	if res.Failed != nil {
+		return exit.New(exit.User, "step %d failed: %s", *res.Failed+1, res.Error)
+	}
 	return nil
 }

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Facets-cloud/bx/internal/browser"
@@ -242,5 +245,87 @@ func cmdStop(e env) error {
 		msg += "; quit " + e.b.Label
 	}
 	e.o.done(msg)
+	return nil
+}
+
+// cmdRecordStart starts recording the tabs bx works in, as video frames.
+func cmdRecordStart(e env) error {
+	dir := e.a.flags["out"]
+	if dir == "" {
+		dir = "bx-recording-" + time.Now().Format("20060102-150405")
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return exit.New(exit.User, "%v", err)
+	}
+	if err := daemon.Call(e.b.Name, daemon.Request{Op: "record-start", Args: map[string]string{"dir": abs, "blur": e.a.flags["blur"]}}, nil, true); err != nil {
+		return err
+	}
+	e.o.done("recording into " + abs + ": bx record stop makes the video")
+	return nil
+}
+
+// cmdRecordStop stops the recording and, when ffmpeg is installed, makes
+// an MP4 with the session's real timing.
+func cmdRecordStop(e env) error {
+	var r daemon.Recording
+	if err := daemon.Call(e.b.Name, daemon.Request{Op: "record-stop"}, &r, false); err != nil {
+		return err
+	}
+	out := e.a.flags["out"]
+	if out == "" {
+		out = r.Dir + ".mp4"
+	}
+	video := ""
+	if ff, err := exec.LookPath("ffmpeg"); err == nil {
+		cmd := exec.Command(ff, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", r.List,
+			"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out)
+		if b, err := cmd.CombinedOutput(); err != nil {
+			return exit.New(exit.Upstream, "ffmpeg: %v: %s", err, strings.TrimSpace(string(b)))
+		}
+		video = out
+	}
+	if e.o.json {
+		e.o.printJSON(map[string]any{"video": video, "frames_dir": r.Dir, "frames": r.Frames, "seconds": r.Seconds})
+		return nil
+	}
+	if video == "" {
+		fmt.Fprintf(e.o.w, "%d frames in %s (install ffmpeg to get a video; %s lists them with their timing)\n", r.Frames, r.Dir, r.List)
+		return nil
+	}
+	fmt.Fprintf(e.o.w, "%s (%.0fs, %d frames)\n", video, r.Seconds, r.Frames)
+	return nil
+}
+
+// cmdDone tells the browser's pages that the agent finished its browser
+// work: the on-page pointer shows "Done" and the summary, then goes away.
+// Without a running connection there is nothing to tidy, which is not an
+// error.
+func cmdDone(e env) error {
+	summary := strings.Join(e.pos, " ")
+	var res json.RawMessage
+	err := daemon.Call(e.b.Name, daemon.Request{Op: "done", Args: map[string]string{"summary": summary}}, &res, false)
+	if err != nil && exit.CodeOf(err) != exit.User {
+		return err
+	}
+	if len(res) > 0 && string(res) != "null" {
+		e.o.printJSON(res) // the session's title, time, actions and the tabs it opened
+		return nil
+	}
+	e.o.done("done")
+	return nil
+}
+
+// cmdStart names the CLI's agent session and sets its mode and typing,
+// which the on-page pointer and pacing follow until bx done.
+func cmdStart(e env) error {
+	if len(e.pos) == 0 {
+		return exit.New(exit.Validation, `usage: bx start "<title>" [--mode fast|watch] [--typing paste|keys]`)
+	}
+	args := map[string]string{"title": strings.Join(e.pos, " "), "task_mode": e.a.flags["mode"], "task_typing": e.a.flags["typing"]}
+	if err := daemon.Call(e.b.Name, daemon.Request{Op: "start", Args: args}, nil, true); err != nil {
+		return err
+	}
+	e.o.done("started: " + args["title"])
 	return nil
 }

@@ -40,6 +40,7 @@ bx list tabs [--profile <name>]
 bx open <url> --profile <name>            # prints the new tab's ID
 bx show tab <id>
 bx snapshot <tab> [--out <file>]          # elements with refs: e12 button "Save"
+          [--interactive] [--within <ref>]  # only controls and headings; one part of the page
 bx read <tab> [--selector <el>] [--format text|html]
 bx screenshot <tab> [--selector <el>] [--full] [--out <file.png>]
 bx eval <tab> '<js expression or () => function>' | --file <script.js>
@@ -49,8 +50,11 @@ bx click <tab> <el> [--double]
 bx hover <tab> <el>
 bx drag <tab> <from-el> <to-el>
 bx fill <tab> <el> <value> [<el> <value> ...]
-bx type <tab> <text> [--submit Enter]     # into whatever has focus
+bx type <tab> <text> [--into <el>] [--submit Enter]  # key by key
 bx key <tab> <key>                        # Enter, Escape, Tab, ArrowDown, Meta+a
+bx batch <tab> '<json steps>' | --file <f> # several actions in one call
+bx start "<title>" [--mode watch] [--typing keys]  # begin a task; the pointer shows the title
+bx done ["<summary>"]                     # once, when finished; lists the tabs the task opened
 bx upload <tab> <el> <file> [<file> ...]
 bx dialog <tab> accept|dismiss [--text <reply>]
 bx front <tab>
@@ -68,22 +72,62 @@ bx list browsers                          # installed, running, debugging on, de
 bx use <browser>                          # set the default browser
 ```
 
-An `<el>` is a ref from the tab's latest `bx snapshot` (such as `e12`) or
-a CSS selector. `--timeout <dur>` (default 30s) bounds waits.
+An `<el>` is a ref from the tab's latest `bx snapshot` (such as `e12`), a
+role and name exactly as a snapshot line shows them (`'button "Next"'`,
+`'textbox "Name" #2'` for the second match), or a CSS selector. A role and
+name waits up to 10s for the element to appear. `--timeout <dur>` (default 30s) bounds waits.
 
 ## How to work a page
 
-1. `bx snapshot <tab>` first. It lists the page's elements with refs, roles,
-   names, values and states like `[checked]` or `[disabled]`. Prefer it to a
-   screenshot: it is text, and its refs are exact.
+1. `bx snapshot <tab> --interactive` first. It lists what you can click or
+   type in, plus headings, with refs, names, values and states like
+   `[checked]`. On a content page it is 3-9x smaller than the full snapshot.
+   Use the full snapshot, or `--within <ref>` for one region, when you need
+   the text around the controls. Prefer either to a screenshot: they are
+   text, and their refs are exact.
 2. Act with refs: `bx click <tab> e12`, `bx fill <tab> e4 'text' e7 Green e9 true`.
    One fill call sets several fields: text fields are typed into, a select
    takes an option's value or visible text, a checkbox or radio takes true
    or false.
 3. Read the action's result. Every action waits for the page to settle,
-   then reports `navigated`, `url`, `title`, `new_tabs` and `dialog`.
+   then reports `navigated`, `url`, `title`, `new_tabs` and `dialog`, and,
+   once the tab has a snapshot, `changes`: what appeared (`+ e61 button
+   "Next"`), disappeared (`- e40 e41`) or changed (`~ e27 combobox
+   value="India"`). Validation errors show up there too. Refs stay the same
+   while an element stays on the page, so you rarely need a new snapshot.
 4. Take a new snapshot after a navigation or a big page change. A ref from
    an old snapshot fails with exit 1 and says so.
+
+## Work in few calls
+
+Each call is a round trip through the model, and those round trips, not
+the browser, are where most of a task's time goes. So understand the page
+once, then send the plan as one call:
+
+- `bx batch <tab> '[...]'` runs steps in order and stops at the first
+  failure, reporting `done` (how many ran), `failed` and `error`. Steps:
+  `{"action":"click","element":"e12"}`, `{"action":"fill","element":"e4","value":"x"}`,
+  `{"action":"type","text":"x","submit":"Enter"}`, `{"action":"key","key":"Tab"}`,
+  `{"action":"goto","url":"..."}`, `{"action":"wait","text":"Saved"}`,
+  also `hover`. A grid of cells in Sheets is one batch of type and key steps.
+- Use `fill` for plain fields. Use `type --into <el>` (or a batch `type`
+  step with `element`) for rich text editors (LinkedIn, Slack, Notion,
+  Gmail compose), autocompletes and pickers. Text set by `eval` can look
+  right yet not count; `fill` and `type` send it the way a paste does.
+  In those editors each newline is a new paragraph: type one between
+  paragraphs, not two.
+  After typing into an autocomplete, `wait` for the suggestion, then click it.
+- Elements inside shadow roots (web components, some composers and
+  dialogs) work like any other: use their snapshot refs. Don't fall back to
+  setting values with `eval`; the app's own state won't see them.
+- To get data out of a page, write one `bx eval` that returns just the
+  fields you need as JSON, rather than reading the whole page or snapshot.
+- Plan across screens in one batch by naming elements by role and name:
+  fill step 1, click `button "Next"`, fill step 2's `textbox "Email"`, and
+  so on. Each named element is waited for, so you don't need a snapshot
+  of the next screen first. Refs (`e12`) only reach what you have seen.
+- After a step that changes the page a lot or loads a new one, the result
+  carries the new screen (its interactive snapshot) in `changes`.
 
 Typing into canvas apps such as Google Sheets: click a real field first
 (for Sheets, `bx fill <tab> '#t-name-box' E5` then `bx key <tab> Enter` to
@@ -91,6 +135,33 @@ select a cell), then `bx type <tab> 'text' --submit Enter`. bx keeps every
 tab it touches focused in the background, so the tab need not be in front.
 
 On macOS, use Meta for shortcuts: `bx key <tab> Meta+a` selects all.
+
+bx has two modes, set in the environment of the agent or MCP server and
+sent with every request. Both open new tabs in front, scroll what they
+act on into view, and show a pointer with a "bx" tag that says what bx is
+doing (clicking, filling, pasting, reading the page, running a script,
+waiting, taking a screenshot) and, in a batch, which step it is on
+("3/32 · Click "Next""). Between your calls it says "Waiting for the agent...", so
+the user can see you are still working. When the browser task is
+finished, run `bx done "<one-line summary>"` once: the pointer shows it,
+then goes away. Don't run it between steps. Begin with
+`bx start "<task title>"`, so the pointer shows "Working on: <title>"
+between your calls. `done` lists the tabs the task opened; they stay
+open, so close the ones the user doesn't need.
+
+- Fast mode, the default: the pointer hops to each element and there is
+  no pacing.
+- `BX_MODE=watch`, for a person following along: the pointer glides and
+  the real mouse travels with it, clicks land near the middle, a native
+  dropdown is shown unfolding to the choice, and batch steps pause
+  briefly.
+
+Text is pasted in one go by default (the page gets the same events as a
+paste). `BX_TYPING=keys` types key by key instead, at human pace in watch
+mode, for sites that only react to key presses.
+
+Both modes use the same browser and logins, and all input arrives as real
+(trusted) events. Screenshots and snapshots leave the overlay out.
 
 ## Dialogs
 

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
@@ -32,31 +31,29 @@ func (s *server) actOn(id string, timeout time.Duration, fn func(ctx context.Con
 
 func (s *server) click(id, el string, double bool, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		sel, err := sess.selector(ctx, el)
+		e, err := sess.element(ctx, el)
 		if err != nil {
 			return err
 		}
-		a := chromedp.Click(chromedp.CSS(sel))
+		verb := "Click"
 		if double {
-			a = chromedp.DoubleClick(chromedp.CSS(sel))
+			verb = "Double-click"
 		}
-		_, err = chromedp.Run(ctx, a)
-		return tabErr(err, "click", el, timeout)
+		return tabErr(sess.press(ctx, e, verb, double), "click", el, timeout)
 	})
 }
 
 // center scrolls the element into view and returns its middle point.
 func center(ctx context.Context, sess *tabSession, el string, timeout time.Duration) (float64, float64, error) {
-	sel, err := sess.selector(ctx, el)
+	e, err := sess.element(ctx, el)
 	if err != nil {
 		return 0, 0, err
 	}
-	if _, err := chromedp.Run(ctx, chromedp.ScrollIntoView(chromedp.CSS(sel))); err != nil {
+	if _, err := chromedp.Run(ctx, chromedp.ScrollIntoView(e.q())); err != nil {
 		return 0, 0, tabErr(err, "scroll", el, timeout)
 	}
-	q, _ := json.Marshal(sel)
 	xy, err := chromedp.Run(ctx, chromedp.Evaluate[[]float64](fmt.Sprintf(
-		`(() => { const r = document.querySelector(%s).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`, q)))
+		`(() => { const r = (%s).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`, e.js)))
 	if err != nil || len(xy) != 2 {
 		return 0, 0, tabErr(err, "locate", el, timeout)
 	}
@@ -65,6 +62,9 @@ func center(ctx context.Context, sess *tabSession, el string, timeout time.Durat
 
 func (s *server) hover(id, el string, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
+		if e, err := sess.element(ctx, el); err == nil {
+			sess.indicate(ctx, "Hover", e.js)
+		}
 		x, y, err := center(ctx, sess, el, timeout)
 		if err != nil {
 			return err
@@ -77,6 +77,9 @@ func (s *server) hover(id, el string, timeout time.Duration) (ActResult, error) 
 // drag presses the mouse on from, moves in steps to to, and releases.
 func (s *server) drag(id, from, to string, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
+		if e, err := sess.element(ctx, from); err == nil {
+			sess.indicate(ctx, "Drag", e.js)
+		}
 		x1, y1, err := center(ctx, sess, from, timeout)
 		if err != nil {
 			return err
@@ -85,17 +88,26 @@ func (s *server) drag(id, from, to string, timeout time.Duration) (ActResult, er
 		if err != nil {
 			return err
 		}
-		steps := []chromedp.Action[chromedp.Void]{
+		press := chromedp.Steps(
 			chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x1, y1),
-			chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x1, y1, chromedp.ButtonLeft, chromedp.ClickCount(1)),
+			chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x1, y1, chromedp.ButtonLeft, chromedp.ClickCount(1)))
+		if _, err := chromedp.Run(ctx, press); err != nil {
+			return err
 		}
+		// Move in steps, with the pointer following the mouse, so the drag
+		// is visible and the page sees intermediate moves.
 		for i := 1; i <= 10; i++ {
 			f := float64(i) / 10
-			steps = append(steps, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved,
-				x1+(x2-x1)*f, y1+(y2-y1)*f, chromedp.ButtonLeft))
+			x, y := x1+(x2-x1)*f, y1+(y2-y1)*f
+			if _, err := chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x, y, chromedp.ButtonLeft)); err != nil {
+				return err
+			}
+			sess.point(ctx, x, y)
+			if !sess.fast.Load() {
+				time.Sleep(between(12*time.Millisecond, 28*time.Millisecond))
+			}
 		}
-		steps = append(steps, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseReleased, x2, y2, chromedp.ButtonLeft, chromedp.ClickCount(1)))
-		_, err = chromedp.Run(ctx, chromedp.Steps(steps...))
+		_, err = chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseReleased, x2, y2, chromedp.ButtonLeft, chromedp.ClickCount(1)))
 		return err
 	})
 }
@@ -104,10 +116,11 @@ func (s *server) drag(id, from, to string, timeout time.Duration) (ActResult, er
 const fieldKindJS = `(el => {
 	if (el.tagName === "SELECT") return "select";
 	if (el.tagName === "INPUT" && (el.type === "checkbox" || el.type === "radio")) return el.type;
+	if (el.tagName === "INPUT" && ["date", "time", "datetime-local", "month", "week", "range", "color"].includes(el.type)) return "value";
 	const role = el.getAttribute("role");
 	if (role === "checkbox" || role === "switch" || role === "radio") return "checkbox";
 	return "text";
-})(document.querySelector(%s))`
+})(%s)`
 
 // selectOptionJS picks the option whose value or visible text is v.
 const selectOptionJS = `((el, v) => {
@@ -117,10 +130,20 @@ const selectOptionJS = `((el, v) => {
 	el.dispatchEvent(new Event("input", {bubbles: true}));
 	el.dispatchEvent(new Event("change", {bubbles: true}));
 	return true;
-})(document.querySelector(%s), %s)`
+})(%s, %s)`
+
+// setValueJS sets a date, time, range or color input, which ignore typed
+// text, through the native setter (so framework-bound inputs see it) and
+// reports whether the browser kept the value.
+const setValueJS = `((el, v) => {
+	Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+	el.dispatchEvent(new Event("input", {bubbles: true}));
+	el.dispatchEvent(new Event("change", {bubbles: true}));
+	return el.value === v;
+})(%s, %s)`
 
 // checkedJS reports whether a checkbox, radio or ARIA switch is on.
-const checkedJS = `(el => el.checked === true || el.getAttribute("aria-checked") === "true")(document.querySelector(%s))`
+const checkedJS = `(el => el.checked === true || el.getAttribute("aria-checked") === "true")(%s)`
 
 // fill sets each element to its value: text fields are typed into,
 // selects pick an option by value or text, and checkboxes and radios are
@@ -140,20 +163,22 @@ func (s *server) fill(id string, pairs [][2]string, timeout time.Duration) (ActR
 }
 
 func fillOne(ctx context.Context, sess *tabSession, el, value string, timeout time.Duration) error {
-	sel, err := sess.selector(ctx, el)
+	e, err := sess.element(ctx, el)
 	if err != nil {
 		return err
 	}
-	if _, err := chromedp.Run(ctx, chromedp.WaitVisible(chromedp.CSS(sel))); err != nil {
+	if _, err := chromedp.Run(ctx, chromedp.WaitVisible(e.q())); err != nil {
 		return tabErr(err, "fill", el, timeout)
 	}
-	q, _ := json.Marshal(sel)
+	sess.indicate(ctx, "Fill", e.js)
+	q := e.js
 	kind, err := chromedp.Run(ctx, chromedp.Evaluate[string](fmt.Sprintf(fieldKindJS, q)))
 	if err != nil {
 		return upstream("fill "+el, err)
 	}
 	switch kind {
 	case "select":
+		sess.showSelect(ctx, e, value)
 		v, _ := json.Marshal(value)
 		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(selectOptionJS, q, v)))
 		if err != nil {
@@ -164,61 +189,77 @@ func fillOne(ctx context.Context, sess *tabSession, el, value string, timeout ti
 		}
 		return nil
 	case "checkbox", "radio":
-		return setChecked(ctx, sel, el, value, timeout)
+		return setChecked(ctx, sess, e, value, timeout)
+	case "value":
+		v, _ := json.Marshal(value)
+		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(setValueJS, q, v)))
+		if err != nil {
+			return upstream("fill "+el, err)
+		}
+		if !ok {
+			return exit.New(exit.User, "%s did not accept %q: dates are YYYY-MM-DD, times HH:MM, months YYYY-MM", el, value)
+		}
+		return nil
 	}
-	return typeInto(ctx, sel, el, value, timeout)
+	return typeInto(ctx, sess, e, value, timeout)
 }
 
-func setChecked(ctx context.Context, sel, el, value string, timeout time.Duration) error {
+func setChecked(ctx context.Context, sess *tabSession, e elem, value string, timeout time.Duration) error {
+	el := e.name
 	want := value == "true"
 	if !want && value != "false" {
 		return exit.New(exit.Validation, "%s is a checkbox or radio: the value must be true or false", el)
 	}
-	q, _ := json.Marshal(sel)
-	on, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(checkedJS, q)))
+	on, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(checkedJS, e.js)))
 	if err != nil {
 		return upstream("fill "+el, err)
 	}
 	if on == want {
 		return nil
 	}
-	_, err = chromedp.Run(ctx, chromedp.Click(chromedp.CSS(sel)))
-	return tabErr(err, "fill", el, timeout)
+	return tabErr(sess.press(ctx, e, "Check", false), "fill", el, timeout)
 }
 
 // typeInto focuses a text field (by a real click when it refuses
 // programmatic focus), selects what it holds and inserts value, which
 // replaces the selection and fires input events as typing does.
-func typeInto(ctx context.Context, sel, el, value string, timeout time.Duration) error {
-	if _, err := chromedp.Run(ctx, chromedp.Focus(chromedp.CSS(sel))); err != nil {
-		if _, err := chromedp.Run(ctx, chromedp.Click(chromedp.CSS(sel))); err != nil {
-			return tabErr(err, "fill", el, timeout)
-		}
-	}
-	steps := chromedp.Steps(
-		chromedp.Evaluate[chromedp.Void](selectFocusedJS),
-		chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
-			if value == "" {
-				_, err := chromedp.Evaluate[chromedp.Void](`document.execCommand("delete")`)(ctx, t)
-				return err
+func typeInto(ctx context.Context, sess *tabSession, e elem, value string, timeout time.Duration) error {
+	el := e.name
+	if sess.fast.Load() {
+		if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err != nil {
+			if _, err := chromedp.Run(ctx, chromedp.Click(e.q())); err != nil {
+				return tabErr(err, "fill", el, timeout)
 			}
-			_, err := cdp.Call(ctx, t, input.InsertText, input.InsertTextParams{Text: value})
-			return err
-		}),
-	)
-	_, err := chromedp.Run(ctx, steps)
-	return tabErr(err, "fill", el, timeout)
+		}
+	} else if err := sess.press(ctx, e, "Fill", false); err != nil { // click into the field, as a person would
+		return tabErr(err, "fill", el, timeout)
+	}
+	if _, err := chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(selectAllJS, e.js))); err != nil {
+		return upstream("fill "+el, err)
+	}
+	if value == "" {
+		_, err := chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](`document.execCommand("delete")`))
+		return tabErr(err, "fill", el, timeout)
+	}
+	sess.say(ctx, sess.typingVerb(value))
+	return tabErr(sess.enter(ctx, value), "fill", el, timeout)
 }
 
-// selectFocusedJS selects all content of the focused field or editable.
-const selectFocusedJS = `(() => {
-	const e = document.activeElement;
-	if (e && typeof e.select === "function") { e.select(); } else { document.execCommand("selectAll"); }
-})()`
+// selectAllJS selects everything in a field, or in an editable element
+// such as a rich text editor, so the next insert replaces it.
+const selectAllJS = `(e => {
+	if (typeof e.select === "function") { e.select(); return; }
+	const r = document.createRange(); r.selectNodeContents(e);
+	const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+})(%s)`
 
 // typeText types text into whatever has focus, key by key, then presses
 // submit (a key such as Enter) if given.
-func (s *server) typeText(id, text, submit string, timeout time.Duration) (ActResult, error) {
+// typeText types text key by key into el, focusing it first, or into
+// whatever has focus when el is empty, then presses submit (a key such as
+// Enter) if given. Key by key is what rich editors and autocompletes
+// listen to, where fill's insert can go unnoticed.
+func (s *server) typeText(id, el, text, submit string, timeout time.Duration) (ActResult, error) {
 	var combo keyCombo
 	if submit != "" {
 		c, err := parseCombo(submit)
@@ -228,7 +269,21 @@ func (s *server) typeText(id, text, submit string, timeout time.Duration) (ActRe
 		combo = c
 	}
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		if _, err := chromedp.Run(ctx, chromedp.KeyEvent(text)); err != nil {
+		target := focusedJS
+		if el != "" {
+			e, err := sess.element(ctx, el)
+			if err != nil {
+				return err
+			}
+			if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err != nil {
+				if _, err := chromedp.Run(ctx, chromedp.Click(e.q())); err != nil {
+					return tabErr(err, "type", el, timeout)
+				}
+			}
+			target = e.js
+		}
+		sess.indicate(ctx, sess.typingVerb(text), target)
+		if err := sess.enter(ctx, text); err != nil {
 			return upstream("type", err)
 		}
 		if submit == "" {
@@ -247,6 +302,7 @@ func (s *server) key(id, keys string, timeout time.Duration) (ActResult, error) 
 		return ActResult{}, err
 	}
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
+		sess.indicate(ctx, "Press "+keys, focusedJS)
 		_, err := chromedp.Run(ctx, combo.action())
 		if err != nil {
 			return upstream("press "+keys, err)
@@ -271,11 +327,12 @@ func (s *server) upload(id, el string, files []string, timeout time.Duration) (A
 		abs[i] = p
 	}
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		sel, err := sess.selector(ctx, el)
+		e, err := sess.element(ctx, el)
 		if err != nil {
 			return err
 		}
-		_, err = chromedp.Run(ctx, chromedp.SetUploadFiles(chromedp.CSS(sel), abs))
+		sess.indicate(ctx, fmt.Sprintf("Attach %d file(s)", len(abs)), e.js)
+		_, err = chromedp.Run(ctx, chromedp.SetUploadFiles(e.q(), abs))
 		return tabErr(err, "upload", el, timeout)
 	})
 }
@@ -384,12 +441,11 @@ func (s *server) wait(id, text, el string, gone bool, timeout time.Duration) (an
 		q, _ := json.Marshal(text)
 		cond = fmt.Sprintf(`document.body && document.body.innerText.includes(%s)`, q)
 	} else {
-		sel, err := sess.selector(sess.ctx, el)
+		e, err := sess.element(sess.ctx, el)
 		if err != nil {
 			return nil, err
 		}
-		q, _ := json.Marshal(sel)
-		cond = fmt.Sprintf(`(e => !!e && e.getClientRects().length > 0)(document.querySelector(%s))`, q)
+		cond = fmt.Sprintf(`(e => !!e && e.isConnected && e.getClientRects().length > 0)(%s)`, e.js)
 	}
 	if gone {
 		cond = "!(" + cond + ")"
@@ -425,6 +481,7 @@ func (s *server) goTo(id, where string, timeout time.Duration) (ActResult, error
 		a = chromedp.Navigate(where)
 	}
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
+		sess.indicate(ctx, "Go "+where, "")
 		_, err := chromedp.Run(ctx, a)
 		return tabErr(err, "go to "+where, "", timeout)
 	})
@@ -443,12 +500,29 @@ func (s *server) snapshot(id string, timeout time.Duration) (Snapshot, error) {
 	}
 	ctx, cancel := context.WithTimeout(sess.ctx, timeout)
 	defer cancel()
-	tree, err := cdp.Call(ctx, sess.t, accessibility.GetFullAXTree, accessibility.GetFullAXTreeParams{})
-	if err != nil {
-		return Snapshot{}, upstream("snapshot", err)
-	}
-	nodes, refs := buildSnapshot(tree.Nodes)
-	sess.refs, sess.refLoader = refs, sess.loaderID(ctx)
-	url, title := sess.location(ctx)
-	return Snapshot{URL: url, Title: title, Nodes: nodes}, nil
+	sess.indicate(ctx, "Read the page", "")
+	return sess.takeSnapshot(ctx)
+}
+
+// scrollEndJS scrolls an element's content to the end, as a person
+// dragging its scrollbar would, which fires its scroll events: terms
+// boxes that unlock "I accept" at the bottom, lists that load more.
+const scrollEndJS = `(e => { e.scrollTo({top: e.scrollHeight, left: 0}); return e.scrollTop; })(%s)`
+
+// scroll scrolls el's own content to the end, or the page when el is
+// empty.
+func (s *server) scroll(id, el string, timeout time.Duration) (ActResult, error) {
+	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
+		target := "document.scrollingElement"
+		if el != "" {
+			e, err := sess.element(ctx, el)
+			if err != nil {
+				return err
+			}
+			sess.indicate(ctx, "Scroll", e.js)
+			target = e.js
+		}
+		_, err := chromedp.Run(ctx, chromedp.Evaluate[float64](fmt.Sprintf(scrollEndJS, target)))
+		return tabErr(err, "scroll", el, timeout)
+	})
 }

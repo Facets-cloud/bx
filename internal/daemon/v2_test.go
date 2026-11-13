@@ -81,7 +81,7 @@ func TestBuildSnapshot(t *testing.T) {
 			Properties: []*accessibility.Property{{Name: "checked", Value: &accessibility.Value{Type: "tristate", Value: []byte(`"true"`)}}}},
 		{NodeID: "6", ParentID: "1", Role: axv("button"), Name: axv("Hidden"), Ignored: true},
 	}
-	got, refs := buildSnapshot(nodes)
+	got, refs := buildSnapshot(nodes, refState{})
 	if len(got) != 2 {
 		t.Fatalf("want the link and the checkbox only, got %+v", got)
 	}
@@ -91,7 +91,7 @@ func TestBuildSnapshot(t *testing.T) {
 	if got[1].Ref != "e2" || got[1].Role != "checkbox" || len(got[1].Props) != 1 || got[1].Props[0] != "checked" {
 		t.Errorf("checkbox: %+v", got[1])
 	}
-	if refs["e1"] != cdp.BackendNodeID(30) || refs["e2"] != cdp.BackendNodeID(50) {
+	if refs.refs["e1"] != cdp.BackendNodeID(30) || refs.refs["e2"] != cdp.BackendNodeID(50) {
 		t.Errorf("refs: %v", refs)
 	}
 	text := Snapshot{URL: "https://x", Title: "X", Nodes: got}.Text()
@@ -153,7 +153,7 @@ func TestSnapshotEditable(t *testing.T) {
 		{NodeID: "2", ParentID: "1", Role: axv("generic"), Name: axv("Editor"), BackendDOMNodeID: 7,
 			Properties: []*accessibility.Property{{Name: "editable", Value: &accessibility.Value{Type: "token", Value: []byte(`"richtext"`)}}}},
 	}
-	got, _ := buildSnapshot(nodes)
+	got, _ := buildSnapshot(nodes, refState{})
 	if len(got) != 1 || got[0].Role != "textbox" || got[0].Name != "Editor" {
 		t.Fatalf("got %+v", got)
 	}
@@ -167,7 +167,7 @@ func TestSnapshotTextboxIsLeaf(t *testing.T) {
 			Properties: []*accessibility.Property{{Name: "editable", Value: &accessibility.Value{Type: "token", Value: []byte(`"plaintext"`)}}}},
 		{NodeID: "4", ParentID: "3", Role: axv("StaticText"), Name: axv("abc")},
 	}
-	got, _ := buildSnapshot(nodes)
+	got, _ := buildSnapshot(nodes, refState{})
 	if len(got) != 1 || got[0].Role != "textbox" || got[0].Value != "abc" {
 		t.Fatalf("want one textbox line, got %+v", got)
 	}
@@ -181,7 +181,7 @@ func TestSnapshotDropsNoise(t *testing.T) {
 		{NodeID: "4", ParentID: "1", Role: axv("StaticText"), Name: axv("“")},
 		{NodeID: "5", ParentID: "1", Role: axv("StaticText"), Name: axv("3 items left!")},
 	}
-	got, _ := buildSnapshot(nodes)
+	got, _ := buildSnapshot(nodes, refState{})
 	if len(got) != 1 || got[0].Name != "3 items left!" {
 		t.Fatalf("want only the real text, got %+v", got)
 	}

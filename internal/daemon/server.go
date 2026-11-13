@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -35,6 +36,8 @@ type server struct {
 	mu        sync.Mutex
 	profileOf map[cdp.BrowserContextID]string // context ID -> profile dir
 	sessions  map[target.ID]*tabSession       // tabs the daemon stays attached to
+	rec       *recorder                       // the running recording, if any
+	tasks     map[string]*task                // agent sessions, by id
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -66,7 +69,8 @@ func Serve(browserName string) int {
 	_ = os.Chmod(sock, 0o600)
 
 	s := &server{b: b, ctx: ctx, since: time.Now(), profileOf: map[cdp.BrowserContextID]string{},
-		sessions: map[target.ID]*tabSession{}, stop: make(chan struct{})}
+		sessions: map[target.ID]*tabSession{},
+		tasks:    map[string]*task{}, stop: make(chan struct{})}
 	s.forgetClosedTabs()
 	reportStart(nil)
 	go s.accept(ln)
@@ -172,21 +176,63 @@ func (s *server) dispatch(req Request) (any, error) {
 		return s.tabs(a["profile"])
 	case "open":
 		tab, err := s.open(a["profile"], a["url"], t)
+		if sess, serr := s.session(tab.ID); err == nil && serr == nil {
+			tk := s.taskFor(a["session"])
+			tk.noteOpened(sess.id)
+			tk.apply(sess, a)
+			s.recordFollow(sess)
+			ctx, cancel := context.WithTimeout(sess.ctx, 2*time.Second)
+			sess.say(ctx, "Opened the page")
+			cancel()
+			sess.idle()
+		}
 		if err == nil && a["follow"] == "true" {
 			_, _ = s.front(tab.ID)
 		}
 		return tab, err
 	case "show":
 		return s.show(a["tab"])
+	case "start":
+		return s.start(a)
+	case "done":
+		return s.finish(a["session"], a["summary"])
+	case "record-start":
+		return s.recordStart(a["dir"], a["blur"])
+	case "record-stop":
+		return s.recordStop()
 	case "close":
 		return s.closeTab(a["tab"])
 	case "cdp":
 		return s.cdp(a["tab"], a["method"], a["params"], t)
 	}
+	if a["tab"] != "" {
+		// The mode comes with each request: one daemon serves clients
+		// that may have set BX_MODE differently.
+		if sess, err := s.session(a["tab"]); err == nil {
+			s.taskFor(a["session"]).apply(sess, a)
+			s.recordFollow(sess)
+			sess.narrate(req.Op, a)
+		}
+	}
 	if a["follow"] == "true" && a["tab"] != "" && req.Op != "front" {
 		_, _ = s.front(a["tab"]) // best effort: never fail the op over it
 	}
-	return s.dispatchTab(req.Op, a, t)
+	res, err := s.dispatchTab(req.Op, a, t)
+	if sess, serr := s.session(a["tab"]); serr == nil && req.Op != "dialog" {
+		defer sess.idle() // after the changes below are read, so they don't see the tag change
+	}
+	if err != nil {
+		return res, err
+	}
+	switch r := res.(type) {
+	case ActResult:
+		r.Changes = s.changes(a["tab"])
+		return r, nil
+	case BatchResult:
+		r.Changes = s.changes(a["tab"])
+		return r, nil
+	}
+	return res, nil
 }
 
 // dispatchTab handles the ops that read or act on one tab.
@@ -216,7 +262,9 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		}
 		return s.fill(id, pairs, t)
 	case "type":
-		return s.typeText(id, a["text"], a["submit"], t)
+		return s.typeText(id, a["selector"], a["text"], a["submit"], t)
+	case "batch":
+		return s.batch(id, a["steps"], t)
 	case "key":
 		return s.key(id, a["keys"], t)
 	case "upload":
@@ -356,4 +404,28 @@ func (s *server) waitFor(match func(*target.Info) bool) (*target.Info, error) {
 		time.Sleep(150 * time.Millisecond)
 	}
 	return nil, exit.New(exit.Upstream, "no matching tab appeared within 10s")
+}
+
+// narrate shows, in watch mode, what an op that has no element to point at
+// is about to do. Actions that point at an element say so themselves.
+func (sess *tabSession) narrate(op string, a map[string]string) {
+	msg := map[string]string{
+		"read": "Read the page", "eval": "Run a script on the page", "console": "Check the console",
+		"network": "Check network requests", "storage": "Read cookies and storage",
+		"performance": "Measure performance", "emulate": "Change how the page is shown",
+	}[op]
+	switch {
+	case op == "read" && a["selector"] != "":
+		msg = "Read " + a["selector"]
+	case op == "wait" && a["text"] != "":
+		msg = fmt.Sprintf("Wait for %q", a["text"])
+	case op == "wait":
+		msg = "Wait for " + a["selector"]
+	}
+	if msg == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(sess.ctx, 2*time.Second)
+	defer cancel()
+	sess.say(ctx, msg)
 }

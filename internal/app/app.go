@@ -37,6 +37,8 @@ Read:
   bx list tabs [--profile <name>]
   bx show tab <id>
   bx snapshot <tab> [--out <file>]  accessibility tree; each element gets a ref like e12
+             [--interactive]        only what can be clicked or typed in, plus headings
+             [--within <ref>]       only the part of the page under that ref
   bx read <tab> [--selector <el>] [--format text|html]
   bx screenshot <tab> [--selector <el>] [--full] [--out <file.png>|-]
   bx eval <tab> '<js>' | --file <script.js>
@@ -62,8 +64,12 @@ Act (each waits for the page to settle and reports navigation, new tabs, dialogs
   bx hover <tab> <el>
   bx drag <tab> <from-el> <to-el>
   bx fill <tab> <el> <value> [<el> <value> ...]   text, select, checkbox (true|false)
-  bx type <tab> <text> [--submit <key>]           into whatever has focus
+  bx type <tab> <text> [--into <el>] [--submit <key>]  key by key, into <el> or what has focus
   bx key <tab> <key>                              Enter, Escape, Control+A, Meta+Shift+R
+  bx batch <tab> '<json steps>' | --file <f>      several actions in one call, such as
+                                                  [{"action":"fill","element":"e3","value":"hi"},
+                                                   {"action":"key","key":"Enter"}]; stops at the
+                                                  first failure
   bx upload <tab> <el> <file> [<file> ...]
   bx dialog <tab> accept|dismiss [--text <reply>]
   bx front <tab>
@@ -72,7 +78,17 @@ Act (each waits for the page to settle and reports navigation, new tabs, dialogs
 
 An <el> is a snapshot ref (e12) or a CSS selector.
 
-Session:
+Record (a video of what bx does, pointer included; follows bx from tab to tab):
+  bx record start [--out <dir>] [--blur <css>]
+                                    start capturing the tab bx works in; --blur
+                                    blurs elements matching the CSS selectors
+  bx record stop [--out <file.mp4>] stop; makes the video with ffmpeg if installed
+
+Session (one agent's task: the on-page pointer shows its title between calls):
+  bx start "<title>" [--mode fast|watch] [--typing paste|keys]
+                                    begin a task; $BX_SESSION names it (default: one CLI session)
+  bx done ["<summary>"]             the agent finished its browser work: the on-page
+                                    pointer shows Done and the summary, then goes away
   bx status                         show the background connection, if any
   bx stop                           close it (the browser asks to Allow again next time);
                                     for an agent browser, also quits it
@@ -162,6 +178,7 @@ var commands = map[string]func(e env) error{
 	"cdp":           cmdCDP,
 	"snapshot":      cmdSnapshot,
 	"eval":          cmdEval,
+	"batch":         cmdBatch,
 	"wait":          cmdWait,
 	"console":       cmdConsole,
 	"network":       cmdNetwork,
@@ -177,6 +194,10 @@ var commands = map[string]func(e env) error{
 	"dialog":        cmdDialog,
 	"front":         cmdFront,
 	"status":        cmdStatus,
+	"done":          cmdDone,
+	"start":         cmdStart,
+	"record start":  cmdRecordStart,
+	"record stop":   cmdRecordStop,
 	"stop":          cmdStop,
 }
 

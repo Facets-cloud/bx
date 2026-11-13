@@ -2,9 +2,12 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chromedp/cdproto/accessibility"
 	"regexp"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,8 +39,14 @@ type tabSession struct {
 	dialog    *Dialog
 	interrupt context.CancelCauseFunc // ends the running action when a dialog opens
 
-	refs      map[string]cdp.BackendNodeID
-	refLoader cdp.LoaderID
+	refs      refState     // refs of the latest snapshot
+	refLoader cdp.LoaderID // the document those refs belong to
+	snap      []SnapNode   // the latest snapshot, for the changes an action reports
+	pointer   *[2]float64  // where bx's on-page pointer last stood, to carry it across pages
+	fast      atomic.Bool  // fast mode, the default; false when the request asked for watch mode (BX_MODE=watch)
+	keyTyping atomic.Bool  // the current request asked to type key by key (BX_TYPING=keys)
+	title     atomic.Value // string: the title of the agent session acting on the tab, if it gave one
+	step      atomic.Value // string: "3/32" while a batch runs, shown in the pointer's tag
 
 	log *devLog // console and network activity, from the moment bx attached
 }
@@ -173,6 +182,9 @@ type ActResult struct {
 	Navigated bool     `json:"navigated"`
 	NewTabs   []string `json:"new_tabs"`
 	Dialog    *Dialog  `json:"dialog,omitempty"`
+	// Changes lists what changed on the page since the last snapshot, by
+	// ref: + added, - removed, ~ changed. Empty until the tab has a snapshot.
+	Changes []string `json:"changes,omitempty"`
 }
 
 // act runs an action, then waits the way a person would before the next
@@ -217,6 +229,9 @@ func (s *server) act(sess *tabSession, timeout time.Duration, fn func(ctx contex
 	r := ActResult{NewTabs: s.openedBy(sess.id, before)}
 	r.Navigated = sess.loaderID(actx) != loader
 	r.URL, r.Title = sess.location(actx)
+	if r.Navigated {
+		sess.say(actx, "Page loaded") // the new page has no pointer until bx draws it again
+	}
 	return r, nil
 }
 
@@ -286,34 +301,143 @@ func (sess *tabSession) location(ctx context.Context) (string, string) {
 
 var refPattern = regexp.MustCompile(`^e[0-9]+$`)
 
-// selector turns an element argument into a CSS selector. A snapshot ref
-// such as e12 is resolved to its DOM node, which gets a data-bx-ref
-// attribute so every action can find it with plain CSS.
-func (sess *tabSession) selector(ctx context.Context, el string) (string, error) {
+// elem is an element an op works on, as a JavaScript expression that
+// evaluates to it. Expressions reach into shadow roots, which CSS through
+// DOM.querySelector cannot.
+type elem struct {
+	name string // what the caller passed, for messages
+	js   string
+}
+
+// q is the element as a chromedp selector.
+func (e elem) q() chromedp.JSPath { return chromedp.JSPath(e.js) }
+
+// deepQueryJS finds the first element matching a CSS selector in the page
+// or, failing that, inside any open shadow root.
+const deepQueryJS = `((s) => {
+	const find = (root) => {
+		const e = root.querySelector(s);
+		if (e) return e;
+		for (const n of root.querySelectorAll("*")) if (n.shadowRoot) { const f = find(n.shadowRoot); if (f) return f; }
+		return null;
+	};
+	return find(document);
+})(%s)`
+
+// refsJS is where the page keeps the elements bx resolved refs to.
+const refsJS = `window[Symbol.for("bx.refs")]`
+
+// namePattern is an element named by role and accessible name, the way a
+// snapshot line shows it: button "Save", or textbox "Name" #2 for the second.
+var namePattern = regexp.MustCompile(`^([A-Za-z]+) "(.*)"(?: #([0-9]+))?$`)
+
+// element turns an element argument into an elem. A snapshot ref such as
+// e12, or a role and name such as button "Save", is resolved to its DOM
+// node, which is then reachable from JavaScript wherever it is, in a shadow
+// root or not. Anything else is a CSS selector.
+func (sess *tabSession) element(ctx context.Context, el string) (elem, error) {
 	if el == "" {
-		return "", exit.New(exit.Validation, "an element (CSS selector or snapshot ref such as e12) is required")
+		return elem{}, exit.New(exit.Validation, "an element (snapshot ref such as e12, role and name such as button \"Save\", or CSS selector) is required")
 	}
-	if !refPattern.MatchString(el) {
-		return el, nil
+	var backend cdp.BackendNodeID
+	switch m := namePattern.FindStringSubmatch(el); {
+	case refPattern.MatchString(el):
+		id, ok := sess.refs.refs[el]
+		if !ok || sess.loaderID(ctx) != sess.refLoader {
+			return elem{}, exit.New(exit.User, "%s is not in this tab's latest snapshot: run bx snapshot %s again", el, sess.id)
+		}
+		backend = id
+	case m != nil:
+		nth, _ := strconv.Atoi(m[3])
+		id, err := sess.findByName(ctx, m[1], m[2], max(nth, 1))
+		if err != nil {
+			return elem{}, err
+		}
+		backend = id
+	default:
+		q, _ := json.Marshal(el)
+		return elem{name: el, js: fmt.Sprintf(deepQueryJS, q)}, nil
 	}
-	backend, ok := sess.refs[el]
-	if !ok || sess.loaderID(ctx) != sess.refLoader {
-		return "", exit.New(exit.User, "%s is not in this tab's latest snapshot: run bx snapshot %s again", el, sess.id)
+	return sess.mark(ctx, el, backend)
+}
+
+// findByName waits, up to nameWait or the context's deadline, for the nth
+// element with this role and accessible name to be on the page. Waiting
+// lets a batch name an element that an earlier step makes appear: the
+// next page of a wizard, or a suggestion that loads late.
+func (sess *tabSession) findByName(ctx context.Context, role, name string, nth int) (cdp.BackendNodeID, error) {
+	wctx, cancel := context.WithTimeout(ctx, nameWait)
+	defer cancel()
+	found := 0
+	for {
+		ids := sess.queryByName(wctx, role, name)
+		if found = len(ids); found >= nth {
+			return ids[nth-1], nil
+		}
+		select {
+		case <-wctx.Done():
+			if found == 0 {
+				return 0, exit.New(exit.User, "no %s named %q on the page (waited %s): check the snapshot for the exact role and name", role, name, nameWait)
+			}
+			return 0, exit.New(exit.User, "only %d %s named %q on the page, not #%d", found, role, name, nth)
+		case <-time.After(150 * time.Millisecond):
+		}
 	}
+}
+
+// nameWait bounds how long an element named by role and name may take to
+// appear.
+const nameWait = 10 * time.Second
+
+// queryByName lists the DOM nodes, in page order, whose accessibility role
+// and name match. Ignored nodes (hidden ones) are left out.
+func (sess *tabSession) queryByName(ctx context.Context, role, name string) []cdp.BackendNodeID {
+	// The document as a JavaScript object: DOM.getDocument would reset the
+	// node IDs chromedp keeps for this tab.
+	doc, err := cdp.Call(ctx, sess.t, runtime.Evaluate, runtime.EvaluateParams{Expression: "document"})
+	if err != nil || doc.Result == nil || doc.Result.ObjectID == "" {
+		return nil
+	}
+	defer func() {
+		_, _ = cdp.Call(ctx, sess.t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: doc.Result.ObjectID})
+	}()
+	res, err := cdp.Call(ctx, sess.t, accessibility.QueryAXTree, accessibility.QueryAXTreeParams{
+		ObjectID: doc.Result.ObjectID, AccessibleName: name, Role: role})
+	if err != nil {
+		return nil
+	}
+	var ids []cdp.BackendNodeID
+	for _, n := range res.Nodes {
+		if !n.Ignored && n.BackendDOMNodeID != 0 {
+			ids = append(ids, n.BackendDOMNodeID)
+		}
+	}
+	return ids
+}
+
+// mark makes the node reachable from JavaScript as el, and checks that it
+// is still in the page: apps that redraw a region replace its elements, and
+// a removed one would never become clickable.
+func (sess *tabSession) mark(ctx context.Context, el string, backend cdp.BackendNodeID) (elem, error) {
 	node, err := cdp.Call(ctx, sess.t, dom.ResolveNode, dom.ResolveNodeParams{BackendNodeID: backend})
 	if err != nil || node.Object == nil {
-		return "", exit.New(exit.User, "%s is no longer on the page: run bx snapshot %s again", el, sess.id)
+		return elem{}, exit.New(exit.User, "%s is no longer on the page: run bx snapshot %s again", el, sess.id)
 	}
-	// el matched ^e[0-9]+$, so it is safe inside the script.
-	_, err = cdp.Call(ctx, sess.t, runtime.CallFunctionOn, runtime.CallFunctionOnParams{
+	key, _ := json.Marshal(el)
+	yes := true
+	res, err := cdp.Call(ctx, sess.t, runtime.CallFunctionOn, runtime.CallFunctionOnParams{
 		// A ref on text names its parent element.
-		FunctionDeclaration: fmt.Sprintf(`function() { (this.nodeType === 3 ? this.parentElement : this).setAttribute("data-bx-ref", %q); }`, el),
+		FunctionDeclaration: fmt.Sprintf(`function() { const e = this.nodeType === 3 ? this.parentElement : this; const m = %s ||= {}; m[%s] = e; return !!e && e.isConnected; }`, refsJS, key),
 		ObjectID:            node.Object.ObjectID,
+		ReturnByValue:       &yes,
 	})
 	if err != nil {
-		return "", upstream("mark "+el, err)
+		return elem{}, upstream("mark "+el, err)
 	}
-	return fmt.Sprintf(`[data-bx-ref=%q]`, el), nil
+	if res.Result == nil || string(res.Result.Value) != "true" {
+		return elem{}, exit.New(exit.User, "%s was removed from the page (the page redrew it): use its new ref from the last action's changes, or take a snapshot", el)
+	}
+	return elem{name: el, js: fmt.Sprintf("%s[%s]", refsJS, key)}, nil
 }
 
 // dropSession forgets a closed tab.
