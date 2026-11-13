@@ -219,11 +219,11 @@ func cmdStatus(e env) error {
 		return err
 	}
 	if e.o.json {
-		e.o.printJSON(map[string]any{"browser": st.Browser, "running": true, "pid": st.PID, "since": st.Since, "known_profiles": st.KnownProfiles})
+		e.o.printJSON(map[string]any{"browser": st.Browser, "running": true, "version": st.Version, "pid": st.PID, "since": st.Since, "known_profiles": st.KnownProfiles})
 		return nil
 	}
-	fmt.Fprintf(e.o.w, "connected to %s (pid %d) since %s; profiles mapped: %d\n",
-		e.b.Label, st.PID, st.Since.Format(time.Kitchen), len(st.KnownProfiles))
+	fmt.Fprintf(e.o.w, "connected to %s (bx %s, pid %d) since %s; profiles mapped: %d\n",
+		e.b.Label, st.Version, st.PID, st.Since.Format(time.Kitchen), len(st.KnownProfiles))
 	return nil
 }
 

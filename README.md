@@ -35,8 +35,9 @@ The browser asks you to Allow each new DevTools connection. So the first
 bx command starts a background process that holds one connection, and
 every later command, from any terminal or agent session, goes through it
 over a Unix socket in `~/Library/Application Support/bx/`. You click Allow
-once per browser run; `bx update` keeps the connection open, so upgrading
-doesn't cost another click. The process exits when the browser quits or on
+once per browser run. After an upgrade (`bx update`, or an npx MCP server
+fetching a new release), the first command replaces the older background
+process, so the browser asks to Allow once more. The process exits when the browser quits or on
 `bx stop`. It never exits just for being idle.
 
 The daemon also stays attached to every tab it touches. That keeps the

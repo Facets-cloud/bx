@@ -13,7 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -94,6 +96,9 @@ func Call(browser string, req Request, out any, start bool) error {
 	sock, lock, log, err := paths(browser)
 	if err != nil {
 		return err
+	}
+	if start {
+		replaceOlder(browser, sock)
 	}
 	conn, err := net.Dial("unix", sock)
 	if err != nil {
@@ -239,4 +244,97 @@ func sessionID() string {
 		return id
 	}
 	return "cli"
+}
+
+// checkedVersion records the browsers whose running daemon this process
+// has compared with its own version.
+var checkedVersion sync.Map
+
+// replaceOlder stops the browser's daemon when it runs an older bx than
+// this one, so the next request starts a current one. A daemon outlives
+// upgrades (an npx MCP server updates itself on its next launch), and an
+// older one lacks the newer ops and behaviour: it would answer start,
+// done or batch with errors the agent can't fix. Replacing it costs one
+// Allow click in the browser. It checks once per process, and never for a
+// development build.
+func replaceOlder(browser, sock string) {
+	if Version == "dev" {
+		return
+	}
+	if _, done := checkedVersion.LoadOrStore(browser, true); done {
+		return
+	}
+	var st Status
+	if ask(sock, Request{Op: "status"}, &st) != nil || !olderVersion(st.Version, Version) {
+		return
+	}
+	_ = ask(sock, Request{Op: "stop"}, nil)
+	for i := 0; i < 50; i++ { // wait until it lets go of the socket
+		if c, err := net.Dial("unix", sock); err != nil {
+			return
+		} else {
+			c.Close()
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// ask sends one request to the daemon on sock and decodes its data.
+func ask(sock string, req Request, out any) error {
+	conn, err := net.DialTimeout("unix", sock, 2*time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		return err
+	}
+	var resp Response
+	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+		return err
+	}
+	if out != nil && len(resp.Data) > 0 {
+		return json.Unmarshal(resp.Data, out)
+	}
+	return nil
+}
+
+// olderVersion reports whether release a (such as v0.3.0) is older than
+// release b. A missing or unparsable version counts as older than any
+// release; "dev" is never older.
+func olderVersion(a, b string) bool {
+	if a == "dev" {
+		return false
+	}
+	pa, okA := semver(a)
+	pb, okB := semver(b)
+	if !okB {
+		return false
+	}
+	if !okA {
+		return true
+	}
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] < pb[i]
+		}
+	}
+	return false
+}
+
+func semver(v string) ([3]int, bool) {
+	var p [3]int
+	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	if len(parts) != 3 {
+		return p, false
+	}
+	for i, s := range parts {
+		n, err := strconv.Atoi(strings.SplitN(s, "-", 2)[0])
+		if err != nil {
+			return p, false
+		}
+		p[i] = n
+	}
+	return p, true
 }
