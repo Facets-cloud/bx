@@ -238,22 +238,12 @@ the agent app after changing its config.
 
 ## Compared with Playwright MCP and Chrome DevTools MCP
 
-The same agent (Claude Opus 5.5) did a 6-step vendor onboarding form
-three times with each tool, side by side; every run finished it. Medians:
-
-| | bx | Playwright MCP | Chrome DevTools MCP |
-| --- | --- | --- | --- |
-| Time | 55 s | 84 s | 112 s |
-| Tool calls | 24 | 62 | 55 |
-| Model cost | $0.27 | $0.54 | $0.59 |
-| MCP server memory | 29 MB (about 95 MB through npx) | 251 MB | 290 MB |
-
-Chrome DevTools MCP figures are from the first round. On a spreadsheet
-that only takes key presses, bx used to lose: it pasted text the page
-ignored. Now it checks that a paste took and types the text itself when it
-didn't, `open` returns the page without a profile lookup, and the tool
-list is a quarter smaller. There bx went from 12 calls and $0.12 to 7 calls
-and $0.08, against 6 calls and $0.09 for Playwright MCP, at the same speed. Prompts, method and every number are in
+On a 6-step vendor onboarding form, the same agent needed a median of 24
+tool calls with bx against 62 with Playwright MCP, because `batch` fills a
+whole step in one call. bx's MCP server uses about 29 MB of memory (about
+95 MB started through npx), against 251 MB and 290 MB. It's a small
+benchmark we ran ourselves, on pages we wrote, after tuning bx; the
+method, every run, where bx lost and the caveats are in
 [docs/benchmark.md](docs/benchmark.md).
 
 ## Fewer calls, faster runs

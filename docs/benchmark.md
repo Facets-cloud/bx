@@ -1,8 +1,29 @@
 # bx vs Playwright MCP vs Chrome DevTools MCP
 
+**Read this first.** This is a small benchmark run by the bx authors, not
+an independent one:
+
+- We wrote the two test pages, for the bx demo, before this benchmark
+  existed. They are multi-step forms and a grid, which is where bx's
+  `batch` helps; other kinds of task may come out differently.
+- We changed bx after seeing the first round (sections "After the paste
+  fix" and "Round 3"), so the later bx numbers are tuned to these tasks.
+- Three runs per tool and task, one Mac, one model (Claude Opus 5.5).
+  Single runs vary a lot; one Playwright MCP run took 124 s against 22 s
+  for the others.
+- Chrome DevTools MCP ran only in the first round, when the model answered
+  more slowly, so its times aren't comparable with the later rounds.
+- Time and cost depend on the model and will change with it. The call
+  counts follow from how each tool works and should hold better.
+
+Playwright MCP and Chrome DevTools MCP are good tools with features bx
+doesn't have (cross-browser and headless runs, performance tracing). If
+you rerun this and get different numbers, open an issue and we'll update
+this page.
+
 Measured 2026-11-14 on an Apple M5 MacBook (16 GB, macOS 27.2.1). Each tool ran the same two tasks 3 times through `claude -p` (Claude Code 2.1.325, model claude-opus-5-5), with only that tool's MCP server loaded and no built-in tools. All 18 runs reached the checked end state. Every number in the tables is a median of 3 runs unless the row says otherwise.
 
-Versions: bx built from `~/dev/work/facets/bx` at commit 986c73d, driving its agent browser (Brave 157.1.99.57). `@playwright/mcp@0.0.85` (playwright 1.66.0-alpha-2026-11-09) and `chrome-devtools-mcp@1.13.0`, both launching the installed Google Chrome 157.0.8103.79.
+Versions: bx built from the bx repo at commit 986c73d, driving its agent browser (Brave 157.1.99.57). `@playwright/mcp@0.0.85` (playwright 1.66.0-alpha-2026-11-09) and `chrome-devtools-mcp@1.13.0`, both launching the installed Google Chrome 157.0.8103.79.
 
 ## Tasks
 
@@ -139,7 +160,7 @@ grid Playwright 21/6/0.073, 22/6/0.098, 22/4/0.093; wizard bx 60/27/0.284,
 | Install size | 12.8 MB binary built locally; npm package `@facets-cloud/bx-darwin-arm64` is 8.6 MB unpacked | 19 MB `node_modules` for `@playwright/mcp@0.0.85` | 17 MB `node_modules` for `chrome-devtools-mcp@1.13.0` |
 | Browser download | none, uses an installed browser | none here (used installed Chrome); without one you run `npx playwright install` for a bundled browser | none, needs installed Chrome |
 | Use the user's existing logged-in profile | yes: attaches to the running browser in the named profile after one Allow click per browser run (or `bx launch` for a separate agent browser with its own logins, which these runs used) | only with the "Playwright Extension" installed in Chrome/Edge (`--extension`), or `--cdp-endpoint` to a browser started with remote debugging; `--user-data-dir` gives it its own persistent profile, not your running one | `--autoConnect` to a running Chrome 144+ after turning on remote debugging at chrome://inspect/#remote-debugging, or `--browserUrl` to a Chrome started with a debugging port; default is its own profile under `~/.cache/chrome-devtools-mcp` |
-| Telemetry | none | none found in flags | usage statistics on by default (`--usageStatistics=false` or `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`); performance traces send URLs to CrUX unless `--performanceCrux=false`. Both were off for these runs |
+| Telemetry | none | none found in flags | usage statistics on by default, as its README documents (`--usageStatistics=false` or `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`); performance traces send URLs to CrUX unless `--performanceCrux=false`. Both were off for these runs |
 | Agent browser launch to first page | 0.41 s for `bx launch` + first command (median of 0.84, 0.41, 0.35 s), then 0.1 s per `open` | 0.6 to 0.9 s for the first `browser_navigate`, which launches Chrome | 1.1 s for the first `new_page`, which launches Chrome |
 | First page loaded, from `claude -p` start | 4.2 to 4.3 s (browser already running) | 5.1 to 5.2 s | 4.7 to 5.4 s |
 
@@ -150,12 +171,12 @@ The "first page loaded" times include Claude Code's own startup and the model's 
 Per tool MCP config (`mcp/*.json`):
 
 ```json
-{"mcpServers":{"bx":{"command":"~/dev/work/facets/bx-bench/bx","args":["mcp"],"env":{"BX_BROWSER":"brave-agent"}}}}
+{"mcpServers":{"bx":{"command":"./bx","args":["mcp"],"env":{"BX_BROWSER":"brave-agent"}}}}
 {"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@0.0.85","--isolated"]}}}
 {"mcpServers":{"chrome-devtools":{"command":"npx","args":["-y","chrome-devtools-mcp@1.13.0","--isolated","--performanceCrux=false","--usageStatistics=false"],"env":{"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS":"1"}}}}
 ```
 
-Each run (`scripts/run.py <tool> <task> <n>`) executes, from `~/dev/work/facets/bx-bench`:
+Each run (`scripts/run.py <tool> <task> <n>`) executes, from the bench folder:
 
 ```sh
 claude -p "<prompt>" --output-format stream-json --verbose \
@@ -198,23 +219,3 @@ Then open the Approvals inbox, review the request you just submitted and approve
 ```
 
 Files: `runs/<task>-<tool>-<n>.jsonl` (stream-json, each line prefixed with seconds since start), `.rss.tsv` (1 s memory samples), `.meta.json`, `.err`; `runs/summary.json` (all per-run metrics); `runs/nav.json`; `states/` (page-posted end states); `scripts/` (runner, checker, tables); `pages/` (bench copies of the test pages). Rebuild the tables with `python3 scripts/summarize.py && python3 scripts/tables.py`. Cost: 21 `claude -p` runs (18 measured + 3 one-turn smoke runs), $5.59 in total.
-
-## What to put on the landing page
-
-Claims the numbers support, all on the multi-step wizard task with Claude Opus 5.5:
-
-1. "Finished a 6-step onboarding form in 61 s, against 106 s with Playwright MCP and 112 s with Chrome DevTools MCP." (median of 3, about 42% less time)
-2. "Half the cost per task: $0.29 against $0.56 (Playwright MCP) and $0.59 (Chrome DevTools MCP)."
-3. "27 tool calls instead of 55 to 63. bx fills a whole form step in one `batch` call."
-4. "The MCP server uses 29 MB of memory, against 251 MB for Playwright MCP and 290 MB for Chrome DevTools MCP." Only with the caveat below about npx.
-5. "No browser download and no extension: bx drives the Chromium browser you already have, in the profile you name."
-
-Claims that would NOT be fair:
-
-- "bx is faster and cheaper" with no task named. On the keyboard-only grid, Playwright MCP was faster (27 s against 29 s) and 29% cheaper ($0.087 against $0.123), because bx pastes text by default and the agent had to switch to key-by-key typing in every run.
-- "bx uses less memory" for the whole setup. The browser dominates: 656 MB for bx's Brave against 629 to 635 MB for Chrome on the wizard, and bx's agent browser stays running between tasks while the others close theirs. Total peak RSS was lower for bx in these runs (685 MB against 760 and 858 MB on the wizard), but the gap is the server, not the browser.
-- The 29 MB server figure if users install bx through npx. These runs started the binary directly. Started as `npx -y @facets-cloud/bx mcp`, the npm and node wrapper processes add roughly 66 MB (measured on the same machine), so about 95 MB. Playwright and DevTools were measured through npx, wrapper included.
-- "More reliable." All three tools passed 6 of 6 runs.
-- "Smaller context." bx's tool definitions cost about 3.2k more tokens than Playwright MCP's (13.3k against 10.1k before any work). bx used fewer tokens per task only because it needed fewer calls.
-- Cold-start claims. In the runs bx's browser was already running, and the other two launched Chrome inside the first navigate call. Measured separately, launch to first page was 0.4 s for bx and 0.6 to 1.1 s for the others, less than the run-to-run noise of a 60 to 110 s task.
-- Anything beyond this setup. These are 3 runs per cell, one machine, one model, two local test pages written for the bx demo. They aren't independent benchmark pages.

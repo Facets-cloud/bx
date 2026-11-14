@@ -411,17 +411,15 @@ docker exec -it api sh</pre>
 
   <section id="compare">
     <div class="kicker">// compared</div>
-    <h2>Half the calls on a real form.</h2>
-    <p class="sub">The same agent (Claude Opus 5.5) did the same 6-step vendor onboarding, from company details through a shadow-DOM bank form, a PDF upload and an approval, three times with each tool, side by side. Every run finished the task. Medians:</p>
+    <h2>Fewer calls on multi-step forms.</h2>
+    <p class="sub">On a 6-step vendor onboarding form (a shadow-DOM bank form, a PDF upload, an approval), the same agent needed a median of <b>24 tool calls with bx against 62 with Playwright MCP</b>: <code>batch</code> fills a whole step in one call. All runs of both finished the task.</p>
     <div class="cmpt"><table>
       <tr><th></th><th>bx</th><th>Playwright MCP</th><th>Chrome DevTools MCP</th></tr>
-      <tr><td>Time</td><td class="us">55 s</td><td>84 s</td><td>112 s</td></tr>
-      <tr><td>Tool calls</td><td class="us">24</td><td>62</td><td>55</td></tr>
-      <tr><td>Model cost</td><td class="us">$0.27</td><td>$0.54</td><td>$0.59</td></tr>
       <tr><td>MCP server memory</td><td class="us">29 MB (about 95 MB started through npx)</td><td>251 MB</td><td>290 MB</td></tr>
       <tr><td>Your logged-in browser</td><td class="us">Yes: the profile you name, one Allow click</td><td>Through a browser extension, or a browser started with a debugging port</td><td>Through remote debugging on Chrome 144+</td></tr>
+      <tr><td>Browser download</td><td class="us">None: uses the Chromium browser you have</td><td>None if Chrome or Edge is installed</td><td>None, needs Chrome</td></tr>
     </table></div>
-    <div class="callout"><b>Where bx used to lose:</b> a spreadsheet that only takes key presses. bx pasted text, the page ignored it, and the agent spent calls finding out. Now bx checks that a paste took and types the text itself when it didn't, <code>open</code> returns the page without a profile lookup, and the tool list is a quarter smaller. On that spreadsheet bx went from 12 calls and $0.12 to 7 calls and $0.08, against 6 calls and $0.09 for Playwright MCP in the same runs, at the same speed (21 s against 22 s). On the form the win comes from <code>batch</code>: one call fills a whole step. Three runs per tool on one Mac, with local test pages; Chrome DevTools MCP figures are from the first round. Numbers, prompts and method: <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
+    <div class="callout"><b>A small benchmark, run by us.</b> We wrote the test pages and tuned bx after the first round, with three runs per tool on one Mac. On a keyboard-only spreadsheet the two came out even, and Playwright MCP has things bx doesn't, such as cross-browser and headless runs. Method, every run, where bx lost and the caveats: <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
   </section>
 
   <section id="history">
