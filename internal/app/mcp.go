@@ -2,9 +2,7 @@ package app
 
 import (
 	"bufio"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,8 +56,9 @@ func cmdMCP(e env) error {
 }
 
 func serveMCP(in io.Reader, out io.Writer) error {
-	// One MCP connection is one agent: its calls share a session in bx.
-	daemon.SessionID = "mcp-" + randomID()
+	// One MCP connection is one agent: its calls share a session in bx,
+	// named after the agent app's own session when it tells us one.
+	daemon.SessionID = daemon.NewSessionID()
 	tools := mcpTools()
 	byName := map[string]mcpTool{}
 	for _, t := range tools {
@@ -112,8 +111,14 @@ func handleMCP(m rpcMsg, tools []mcpTool, byName map[string]mcpTool) rpcMsg {
 	case "initialize":
 		var p struct {
 			ProtocolVersion string `json:"protocolVersion"`
+			ClientInfo      struct {
+				Name string `json:"name"`
+			} `json:"clientInfo"`
 		}
 		_ = json.Unmarshal(m.Params, &p)
+		if p.ClientInfo.Name != "" {
+			daemon.Harness = p.ClientInfo.Name // such as claude-code or codex-mcp-client
+		}
 		v := p.ProtocolVersion
 		if v == "" {
 			v = mcpProtocol
@@ -270,6 +275,35 @@ func readTools() []mcpTool {
 	return []mcpTool{
 		{Name: "list_profiles", Description: "List the browser's profiles (display name and folder).",
 			InputSchema: schema(nil, nil), run: listProfilesTool},
+		{Name: "history", Description: "What bx did, from its local audit log (last 30 days). Without session: the recent sessions, " +
+			"each with its time, title, action count and sites. With session (current, previous or an id from that list): " +
+			"that session from start to end as a tree: its tasks (start to done), the pages each worked on, and each action " +
+			"with its result. Inside Claude Code or Codex, a session is the app's own session. Typed values are not logged.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+				"session": str("current, previous, or a session id. Omit to list sessions."),
+				"limit":   map[string]any{"type": "integer", "description": "At most this many sessions, or a session's last this many tasks."}}},
+			run: func(args map[string]any) (mcpContent, error) {
+				limit, _ := strconv.Atoi(argString(args, "limit"))
+				if limit == 0 {
+					limit = 20
+				}
+				text, err := historyText(argString(args, "session"), limit)
+				return mcpContent{text: text}, err
+			}},
+		{Name: "settings", Description: "Read bx's log settings (log.values, log.days, log.max, log.archive_max), or change one with key and value. " +
+			"You may only raise retention (more days, bigger limits). Lowering logging, or changing log.values, is for the user: " +
+			"the error gives the command for them to run.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+				"key":   str("The setting to change, such as log.days. Omit to read them all."),
+				"value": str("The new value, such as 365, 0 (keep forever) or 10GB.")}},
+			run: func(args map[string]any) (mcpContent, error) {
+				if key := argString(args, "key"); key != "" {
+					if err := setSetting(key, argString(args, "value"), true); err != nil {
+						return mcpContent{}, err
+					}
+				}
+				return mcpContent{text: daemon.FormatSettings(daemon.LoadConfig().Settings())}, nil
+			}},
 		opTool("list_tabs", "List open tabs, optionally only those of one profile.", "tabs",
 			map[string]any{"profile": str("Profile name or folder, exact.")}, nil, map[string]string{"profile": "profile"}),
 		opTool("open", "Open a URL in a new tab of the named profile; returns the tab.", "open",
@@ -566,11 +600,4 @@ func batchTool(args map[string]any) (mcpContent, error) {
 	}
 	return daemonCall(args, "batch", map[string]string{"tab": argString(args, "tab"), "steps": string(steps),
 		"timeout": orDefault(argString(args, "timeout"), "30s")})
-}
-
-// randomID is a short random hex string for naming a session.
-func randomID() string {
-	b := make([]byte, 6)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

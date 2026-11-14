@@ -1,0 +1,9 @@
+{
+  "name": "bx",
+  "description": "Drive the Chromium browser you already have open, in a profile you name, with your logins: MCP tools plus a skill that teaches the agent to batch steps, show its pointer and ask before it submits.",
+  "author": { "name": "Facets" },
+  "homepage": "https://facets-cloud.github.io/bx/",
+  "repository": "https://github.com/Facets-cloud/bx",
+  "license": "MIT",
+  "keywords": ["browser", "chromium", "mcp", "automation", "devtools"]
+}

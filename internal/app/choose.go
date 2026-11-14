@@ -1,10 +1,8 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/Facets-cloud/bx/internal/browser"
 	"github.com/Facets-cloud/bx/internal/daemon"
@@ -12,41 +10,10 @@ import (
 )
 
 // config is what bx remembers between runs.
-type config struct {
-	Browser string `json:"browser,omitempty"` // set by bx use
-}
-
-func configPath() (string, error) {
-	dir, err := daemon.Dir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "config.json"), nil
-}
-
-func loadConfig() config {
-	var c config
-	if p, err := configPath(); err == nil {
-		if b, err := os.ReadFile(p); err == nil {
-			_ = json.Unmarshal(b, &c)
-		}
-	}
-	return c
-}
-
-func saveConfig(c config) error {
-	p, err := configPath()
-	if err != nil {
-		return err
-	}
-	b, _ := json.MarshalIndent(c, "", "  ")
-	return os.WriteFile(p, b, 0o600)
-}
-
 // chooseBrowser picks the browser to drive: --browser, then $BX_BROWSER,
 // then the default saved by bx use, then the first with debugging on.
 func chooseBrowser(flag string) (browser.Browser, error) {
-	for _, name := range []string{flag, os.Getenv("BX_BROWSER"), loadConfig().Browser} {
+	for _, name := range []string{flag, os.Getenv("BX_BROWSER"), daemon.LoadConfig().Browser} {
 		if name != "" {
 			return browser.Lookup(name)
 		}
@@ -56,12 +23,12 @@ func chooseBrowser(flag string) (browser.Browser, error) {
 
 func cmdUse(e env) error {
 	if len(e.pos) == 0 {
-		name := loadConfig().Browser
+		name := daemon.LoadConfig().Browser
 		if name == "" {
 			name = "(none: bx picks the browser with remote debugging on)"
 		}
 		if e.o.json {
-			e.o.printJSON(map[string]string{"default": loadConfig().Browser})
+			e.o.printJSON(map[string]string{"default": daemon.LoadConfig().Browser})
 		} else {
 			fmt.Fprintln(e.o.w, "default browser:", name)
 		}
@@ -74,7 +41,9 @@ func cmdUse(e env) error {
 	if err != nil {
 		return err
 	}
-	if err := saveConfig(config{Browser: b.Name}); err != nil {
+	c := daemon.LoadConfig()
+	c.Browser = b.Name
+	if err := daemon.SaveConfig(c); err != nil {
 		return exit.New(exit.User, "save the default: %v", err)
 	}
 	e.o.done("bx now drives " + b.Label + " by default")

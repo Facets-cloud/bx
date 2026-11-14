@@ -189,6 +189,11 @@
   .browsers { margin-top: 12px; display: grid; gap: 6px; font-size: 14px; }
   .browsers div { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
   .browsers code { background: none; padding: 0; color: var(--muted); }
+  .tree { margin-top: 40px; background: var(--term); color: var(--termfg); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
+  .tree pre { margin: 0; font: 13.5px/1.65 "JetBrains Mono", monospace; white-space: pre; }
+  .tree .c { color: #8a8a82; }
+  .tree .bad { color: #ff7070; }
+  .tree .t { color: #7aa2ff; }
   .callout { margin-top: 16px; border: 1px dashed var(--line); border-radius: 14px; padding: 18px 22px; color: var(--muted); font-size: 15.5px; }
   .callout b { color: var(--fg); }
   .callout code { font-size: 13px; }
@@ -247,7 +252,7 @@
 <nav>
   <div class="wrap">
     <a class="mark" href="#"><b>b</b>x</a>
-    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
+    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
   </div>
 </nav>
 
@@ -398,11 +403,48 @@ docker exec -it api sh</pre>
     </div>
   </section>
 
+  <section id="history">
+    <div class="kicker">// history</div>
+    <h2>Ask what it did. Get the whole session.</h2>
+    <p class="sub">bx logs every action on your machine, one file per agent session. Inside Claude Code or Codex that's the app's own conversation, so you can jump back to it. Ask your agent "what did bx do in my last session?" and it calls <code>history</code>, which draws the session from start to end: each task, the pages it worked on, and every action with its result.</p>
+    <div class="tree"><pre><span class="c">bx-4c1e9a07d2f3  claude-code  bx  Nov 14 13:00:29-13:01:02  "Read example.com"  4 actions, 2 failed
+resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
+├─ <span class="t">"Read example.com"</span>  13:00:29-13:00:32  3 actions, 1 failed  done: "Followed the link"
+│  ├─ Personal  example.com/
+│  │  ├─ 13:00:29  open https://example.com  ok 413ms
+│  │  └─ 13:00:29  click a  ok 364ms  -> iana.org/help/example-domains
+│  └─ Personal  iana.org/help/example-domains
+│     └─ 13:00:30  fill #nope  <span class="bad">FAILED: no visible element matches "#nope"</span>
+└─ <span class="t">(untitled)</span>  13:00:32-13:01:02  1 action
+   └─ Personal  iana.org/help/example-domains
+      └─ 13:00:32  goto back  ok 236ms  -> example.com/</pre></div>
+    <div class="settings">
+      <div class="vars">
+        <table>
+          <tr><th colspan="2">What's logged</th></tr>
+          <tr><td>Logged</td><td>Time, browser, profile, the page it acted on and where it led, the action and its target, the result and how long it took.</td></tr>
+          <tr><td>Left out</td><td>What was typed, and what links carry. A fill shows the field, never the value; typed text and scripts show only their length. URLs are logged without the part after <code>?</code> or <code>#</code>, where sign-in codes and reset tokens travel. <code>bx config set log.values full</code> logs values for debugging, <code>off</code> logs nothing. Only you can change this, never the agent.</td></tr>
+          <tr><td>Where</td><td>Only on your Mac, readable only by you. Nothing is sent anywhere.</td></tr>
+        </table>
+      </div>
+      <div class="vars">
+        <table>
+          <tr><th colspan="2">How long it's kept</th></tr>
+          <tr><td>Why size, not age</td><td>One action is about 285 bytes. An agent doing 2,000 actions a day writes about 210 MB a year, so 2 GB lasts around ten years. An age limit would only throw history away, so logs are kept until they get big, not until they get old.</td></tr>
+          <tr><td>Recent</td><td>Plain files, up to 2 GB in total, about 7.5 million actions.</td></tr>
+          <tr><td>Older</td><td>Past 2 GB, the oldest sessions are gzipped, about ten times smaller, up to 5 GB. <code>history</code> reads them as they are.</td></tr>
+          <tr><td>Expiry</td><td>Past the 5 GB, the oldest archived sessions are deleted. That only stops a runaway agent from filling the disk.</td></tr>
+          <tr><td>Change it</td><td><code>bx config set log.days 90</code> makes history expire; <code>log.max</code> and <code>log.archive_max</code> take sizes. Agents can raise these, only you can lower them.</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="setup">
     <div class="kicker">// setup</div>
     <h2>Three steps, once per browser.</h2>
     <div class="steps">
-      <div class="step"><h3>Add the MCP server</h3><p>Claude Code: the command at the top. Codex: <code>codex mcp add bx -- npx -y @facets-cloud/bx mcp</code>. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>.</p></div>
+      <div class="step"><h3>Add the MCP server</h3><p>Claude Code: the command at the top, or the plugin, which adds the skill too: <code>claude plugin marketplace add Facets-cloud/bx &amp;&amp; claude plugin install bx@bx</code>. Codex: <code>codex mcp add bx -- npx -y @facets-cloud/bx mcp</code>. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>.</p></div>
       <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open this page in your browser and switch it on.</p>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
@@ -411,12 +453,12 @@ docker exec -it api sh</pre>
   </section>
 
   <section id="tools">
-    <div class="kicker">// 31 tools</div>
+    <div class="kicker">// 33 tools</div>
     <h2>Everything you'd do by hand, plus DevTools.</h2>
     <p class="sub">The agent snapshots a tab and gets a ref like <code>e12</code> for each element, or names one the way the snapshot shows it: <code>button "Next"</code>. Actions report what changed on the page, and <code>batch</code> runs a whole plan in one call, across screens it hasn't seen yet.</p>
     <div class="tools-grid">
-      <div class="group"><h3>Setup <span>4</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li></ul></div>
-      <div class="group"><h3>Read <span>7</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li></ul></div>
+      <div class="group"><h3>Setup <span>5</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li><li>settings</li></ul></div>
+      <div class="group"><h3>Read <span>8</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li><li>history</li></ul></div>
       <div class="group"><h3>Act <span>14</span></h3><ul><li>open</li><li>goto</li><li>click</li><li>hover</li><li>drag</li><li>fill</li><li>type</li><li>key</li><li>upload</li><li>dialog</li><li>close_tab</li><li>batch</li><li>start</li><li>done</li></ul></div>
       <div class="group dbg"><h3>Debug <span>6</span></h3><ul><li>console</li><li>network</li><li>storage</li><li>performance</li><li>emulate</li><li>cdp</li></ul></div>
     </div>

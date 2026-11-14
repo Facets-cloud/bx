@@ -30,6 +30,7 @@ type TaskSummary struct {
 	Seconds float64 `json:"seconds"`
 	Actions int     `json:"actions"`
 	Opened  []Tab   `json:"opened_tabs"`
+	Log     string  `json:"log,omitempty"` // the session's audit log file
 }
 
 // taskFor returns the session a request belongs to, starting it on first
@@ -46,6 +47,19 @@ func (s *server) taskFor(id string) *task {
 		s.tasks[id] = t
 	}
 	return t
+}
+
+// taskTitle is the title a session started with, if any.
+func (s *server) taskTitle(id string) string {
+	s.mu.Lock()
+	t := s.tasks[id]
+	s.mu.Unlock()
+	if t == nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.title
 }
 
 // start names the session and sets its mode and typing; they override
@@ -111,6 +125,7 @@ func (s *server) finish(id, summary string) (any, error) {
 	if _, err := s.done(summary, touched); err != nil {
 		return nil, err
 	}
+	sum.Log, _ = logPath(id)
 	names := s.profileNames()
 	for _, id := range opened {
 		if info, err := s.findTab(string(id)); err == nil {

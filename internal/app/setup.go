@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,17 +12,22 @@ import (
 
 	"github.com/Facets-cloud/bx/internal/daemon"
 	"github.com/Facets-cloud/bx/internal/exit"
+	"github.com/Facets-cloud/bx/plugin"
 )
 
-//go:embed skill/SKILL.md
-var skillMD []byte
+// skillMD is the agent skill; the plugin ships the same file.
+var skillMD = plugin.SkillMD
 
 // skillTargets lists where the skill goes: one path per agent harness
-// whose config home exists.
+// whose config home exists. Claude Code is left out when the bx plugin is
+// installed there, since the plugin brings the skill.
 func skillTargets() []string {
 	home, _ := os.UserHomeDir()
 	var out []string
 	for _, h := range []string{".claude", ".codex"} {
+		if h == ".claude" && claudePluginInstalled(home) {
+			continue
+		}
 		if fi, err := os.Stat(filepath.Join(home, h)); err == nil && fi.IsDir() {
 			out = append(out, filepath.Join(home, h, "skills", "bx", "SKILL.md"))
 		}
@@ -30,8 +35,29 @@ func skillTargets() []string {
 	return out
 }
 
+// claudePluginInstalled reports whether Claude Code has the bx plugin.
+func claudePluginInstalled(home string) bool {
+	b, err := os.ReadFile(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))
+	if err != nil {
+		return false
+	}
+	var f struct {
+		Plugins map[string]json.RawMessage `json:"plugins"`
+	}
+	if json.Unmarshal(b, &f) != nil {
+		return false
+	}
+	_, ok := f.Plugins["bx@bx"]
+	return ok
+}
+
 func cmdSkillInstall(e env) error {
 	targets := skillTargets()
+	home, _ := os.UserHomeDir()
+	if len(targets) == 0 && claudePluginInstalled(home) {
+		e.o.done("the bx plugin for Claude Code already brings the skill")
+		return nil
+	}
 	if len(targets) == 0 {
 		return exit.New(exit.User, "found neither ~/.claude nor ~/.codex; install Claude Code or Codex first")
 	}

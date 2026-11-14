@@ -100,6 +100,88 @@ never calls `done`, its pointer goes away 20 seconds after its last
 command (2 minutes for a titled session), or when its MCP connection
 ends. CLI agents use `bx start "<title>"` and `bx done "<summary>"`.
 
+### History: what did bx do?
+
+bx keeps a local log with one file per session, under
+`~/Library/Application Support/bx/sessions/`. Inside Claude Code or Codex
+the session is the app's own session, so one conversation is one file,
+whether the agent used the MCP tools or the CLI. Each line has the time,
+browser, profile, tab, the page it acted on and the page it led to, the
+action and its target (`click button "Next"`), whether it worked, and how
+long it took. Only you can read the files (mode 0600).
+
+It leaves out what was typed and what a link carries. A fill shows the
+field (`fill textbox "Password"`), never the value; typed text and `eval`
+scripts show only their length. URLs are logged without their query
+string or `#` fragment, where sign-in codes, reset tokens and session ids
+travel, so the log keeps `app.example.com/reset`, never what follows `?`.
+`bx config set log.values full` logs values and whole URLs, for
+debugging, and `log.values off` turns logging off. These live only in
+bx's config file, so an agent can't switch logging off for its own
+commands.
+
+Ask your agent "what did bx do in my last session?" and it calls the
+`history` tool. At a terminal, `bx history` lists sessions, and `bx
+history previous` (or `current`, or a session id) draws one from start to
+end: its tasks, the pages each task worked on, and the actions on each.
+
+```
+bx-4c1e9a07d2f3  claude-code  bx  Nov 14 13:00:29-13:01:02  "Read example.com"  4 actions, 2 failed
+resume: claude --resume 1b6e2c90-5a4d-…
+log: ~/Library/Application Support/bx/sessions/bx-4c1e9a07d2f3.jsonl
+├─ "Read example.com"  Nov 14 13:00:29-13:00:32  3 actions, 1 failed  done: "Followed the link"
+│  ├─ Personal  example.com/
+│  │  ├─ 13:00:29  open https://example.com  ok 413ms
+│  │  └─ 13:00:29  click a  ok 364ms  -> iana.org/help/example-domains
+│  └─ Personal  iana.org/help/example-domains
+│     └─ 13:00:30  fill #nope  FAILED: no visible element matches "#nope"
+└─ (untitled)  Nov 14 13:00:32-13:01:02  1 action
+   └─ Personal  iana.org/help/example-domains
+      └─ 13:00:32  goto back  ok 236ms  -> example.com/
+```
+
+`done` returns the session's log file too.
+
+Session ids start with `bx-`. Inside Claude Code or Codex, bx derives the
+id from the app's own session, so the MCP server and every CLI command in
+one conversation share it, and records the app's session id beside it:
+`bx history <id>` takes either, and the tree shows how to resume the
+conversation. Elsewhere, each MCP connection gets a new random id.
+
+How long logs are kept, with the defaults. Logs are kept until they get
+big, not until they get old: one action is about 285 bytes, so 2 GB holds
+about 7.5 million actions. An agent doing 2,000 actions a day writes about
+210 MB a year, so the 2 GB of plain files lasts around ten years, and
+gzipped sessions fit about 190 million more in 5 GB. An age limit would
+only throw history away, so there is none by default; the size limits
+keep a runaway agent from filling the disk.
+
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `log.max` | `2GB` | Plain session files may take this much; past it, the oldest are gzipped, a tenth of the size or less. |
+| `log.archive_max` | `5GB` | Gzipped sessions may take this much; past it, the oldest are deleted. |
+| `log.days` | `0` | Sessions older than this many days are deleted; `0` keeps them. For anyone who wants history to expire. |
+| `log.values` | `on` | `on` leaves typed values and URL query strings out, `full` logs them, `off` logs nothing. |
+
+All the limits apply at once, and whichever a session meets first acts on
+it. `bx config` shows the settings and `bx config set log.days 365`
+changes one. Agents can read them through the `settings` tool and raise
+retention, but only you can lower logging: the tool answers with the
+command for you to run. bx checks the limits when its
+background process starts and every hour while it runs.
+
+`history` reads archived sessions as they are, and a small index of
+per-file summaries keeps it fast: with 800,000 logged actions, listing
+sessions or opening one takes about 10 ms.
+
+Each session file is JSON lines: a header line
+(`{"v":1,"type":"session","session":…,"harness":…,"harness_session":…,"project":…,"started":…}`),
+then one line per action (`t`, `session`, `title`, `browser`, `profile`,
+`tab`, `url`, `to`, `op`, `target`, `error`, `ms`). To send the logs to
+Loki, Splunk, Datadog or a SIEM, point a log shipper such as Fluent Bit,
+Vector or the OpenTelemetry Collector at the sessions folder.
+
 ### Defaults, for power users
 
 To change what bx does when the agent doesn't say, set environment
@@ -152,6 +234,24 @@ deciding what to do. bx is built to need fewer of them.
   like any other.
 
 ## Install (macOS)
+
+### As a plugin (Claude Code or Codex)
+
+The plugin brings the MCP server and the skill, and updates through the
+plugin manager:
+
+```sh
+claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
+codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
+```
+
+Or, inside Claude Code: `/plugin install bx --marketplace Facets-cloud/bx`.
+Restart the agent, then ask it to run bx's `doctor` tool. If you added bx
+earlier with `claude mcp add`, remove that copy (`claude mcp remove -s
+user bx`) so the agent doesn't see two. With the plugin installed, `bx
+skill install` leaves Claude Code alone.
+
+### With the binary
 
 In any Claude Code or Codex session, paste this:
 
@@ -218,9 +318,9 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 ### Use it as an MCP server
 
 bx is also a Model Context Protocol server, and MCP can be the only way you
-use it. `bx mcp` serves 31 tools on stdio: setup (`doctor`,
-`list_browsers`, `setup`, `launch`), reading (`list_profiles`,
-`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`), acting
+use it. `bx mcp` serves 33 tools on stdio: setup (`doctor`,
+`list_browsers`, `setup`, `launch`, `settings`), reading (`list_profiles`,
+`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`, `history`), acting
 (`open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`,
 `upload`, `dialog`, `close_tab`, `batch`, `start`, `done`) and debugging (`console`, `network`,
 `storage`, `performance`, `emulate`, `cdp`). They forward to the same background

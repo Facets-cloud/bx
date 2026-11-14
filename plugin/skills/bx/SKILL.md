@@ -149,6 +149,16 @@ then goes away. Don't run it between steps. Begin with
 between your calls. `done` lists the tabs the task opened; they stay
 open, so close the ones the user doesn't need.
 
+When the user asks what bx did ("what did you do in my last session?",
+"which pages did you open yesterday?"), read the log instead of guessing:
+`bx history` lists recent sessions, `bx history previous` (or `current`,
+or a session id) draws one session from start to end: its tasks, the
+pages each worked on and the actions on each, with results. Inside Claude
+Code or Codex a bx session is the app's own session. Over MCP it is the
+`history` tool. Typed values are not in the log. The log settings are
+`bx config` (MCP: `settings`); you may raise retention when the user asks,
+but lowering logging is the user's call: give them the command.
+
 - Fast mode, the default: the pointer hops to each element and there is
   no pacing.
 - `BX_MODE=watch`, for a person following along: the pointer glides and

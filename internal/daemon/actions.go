@@ -469,9 +469,9 @@ func (s *server) goTo(id, where string, timeout time.Duration) (ActResult, error
 	var a chromedp.Action[chromedp.Void]
 	switch where {
 	case "back":
-		a = chromedp.NavigateBack()
+		a = historyStep(-1)
 	case "forward":
-		a = chromedp.NavigateForward()
+		a = historyStep(1)
 	case "reload":
 		a = chromedp.Reload()
 	default:
@@ -484,6 +484,41 @@ func (s *server) goTo(id, where string, timeout time.Duration) (ActResult, error
 		sess.indicate(ctx, "Go "+where, "")
 		_, err := chromedp.Run(ctx, a)
 		return tabErr(err, "go to "+where, "", timeout)
+	})
+}
+
+// historyStep goes back (-1) or forward (1) in the tab's history and waits
+// until the page shows that entry. chromedp's own NavigateBack waits for a
+// load event, which a page restored from the back-forward cache never
+// fires, so it hung until the timeout.
+func historyStep(delta int64) chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		res, err := cdp.Call(ctx, t, page.GetNavigationHistory, cdp.Empty{})
+		if err != nil {
+			return err
+		}
+		i := res.CurrentIndex + delta
+		if i < 0 || i >= int64(len(res.Entries)) {
+			return exit.New(exit.User, "no page to go %s to in this tab's history", map[int64]string{-1: "back", 1: "forward"}[delta])
+		}
+		if _, err := cdp.Call(ctx, t, page.NavigateToHistoryEntry, page.NavigateToHistoryEntryParams{EntryID: res.Entries[i].ID}); err != nil {
+			return err
+		}
+		// Done when the tab's current entry is the one asked for and the
+		// document has finished loading.
+		for {
+			h, err := cdp.Call(ctx, t, page.GetNavigationHistory, cdp.Empty{})
+			if err == nil && h.CurrentIndex == i {
+				if state, err := chromedp.Run(ctx, chromedp.Evaluate[string](`document.readyState`)); err == nil && state == "complete" {
+					return nil
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
 	})
 }
 
