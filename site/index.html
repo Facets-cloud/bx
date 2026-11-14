@@ -421,7 +421,7 @@ docker exec -it api sh</pre>
       <tr><td>MCP server memory</td><td class="us">29 MB (about 95 MB started through npx)</td><td>251 MB</td><td>290 MB</td></tr>
       <tr><td>Your logged-in browser</td><td class="us">Yes: the profile you name, one Allow click</td><td>Through a browser extension, or a browser started with a debugging port</td><td>Through remote debugging on Chrome 144+</td></tr>
     </table></div>
-    <div class="callout"><b>Where bx lost:</b> on a spreadsheet that only takes key presses, Playwright MCP was a little faster (27 s against 29 s) and cheaper ($0.09 against $0.12). bx pastes text by default, and the agent had to switch to key-by-key typing. The win on the form comes from <code>batch</code>: one call fills a whole step. Three runs per tool on one Mac, with local test pages; the full numbers, prompts and method are in <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
+    <div class="callout"><b>Where bx lost:</b> on a spreadsheet that only takes key presses, Playwright MCP needed fewer calls. bx pastes text by default; the page ignored it, and the agent had to notice and switch to key-by-key typing. bx now checks that a paste took and types the text itself when it didn't, which cut its calls from 12 to 10 and its cost from $0.12 to $0.10, against 7 calls and $0.09 for Playwright MCP run at the same time. The win on the form comes from <code>batch</code>: one call fills a whole step. Three runs per tool on one Mac, with local test pages; the full numbers, prompts and method are in <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
   </section>
 
   <section id="history">

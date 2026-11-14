@@ -226,10 +226,8 @@ func setChecked(ctx context.Context, sess *tabSession, e elem, value string, tim
 func typeInto(ctx context.Context, sess *tabSession, e elem, value string, timeout time.Duration) error {
 	el := e.name
 	if sess.fast.Load() {
-		if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err != nil {
-			if _, err := chromedp.Run(ctx, chromedp.Click(e.q())); err != nil {
-				return tabErr(err, "fill", el, timeout)
-			}
+		if err := sess.focusOrClick(ctx, e); err != nil {
+			return tabErr(err, "fill", el, timeout)
 		}
 	} else if err := sess.press(ctx, e, "Fill", false); err != nil { // click into the field, as a person would
 		return tabErr(err, "fill", el, timeout)
@@ -275,10 +273,8 @@ func (s *server) typeText(id, el, text, submit string, timeout time.Duration) (A
 			if err != nil {
 				return err
 			}
-			if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err != nil {
-				if _, err := chromedp.Run(ctx, chromedp.Click(e.q())); err != nil {
-					return tabErr(err, "type", el, timeout)
-				}
+			if err := sess.focusOrClick(ctx, e); err != nil {
+				return tabErr(err, "type", el, timeout)
 			}
 			target = e.js
 		}

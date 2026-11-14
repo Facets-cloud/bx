@@ -248,9 +248,12 @@ three times with each tool; every run finished it. Medians:
 | Model cost | $0.29 | $0.56 | $0.59 |
 | MCP server memory | 29 MB (about 95 MB through npx) | 251 MB | 290 MB |
 
-On a spreadsheet that only takes key presses, Playwright MCP was a little
-faster and cheaper: bx pastes text by default and the agent had to switch
-to key-by-key typing. Prompts, method and every number are in
+On a spreadsheet that only takes key presses, Playwright MCP needed fewer
+calls. bx pastes text by default; the page ignored it until the agent
+switched to key-by-key typing. bx now checks that a paste took and types
+the text itself when it didn't: that cut its calls from 12 to 10 and its
+cost from $0.12 to $0.10, against 7 calls and $0.09 for Playwright MCP
+run at the same time. Prompts, method and every number are in
 [docs/benchmark.md](docs/benchmark.md).
 
 ## Fewer calls, faster runs

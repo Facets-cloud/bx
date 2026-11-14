@@ -72,6 +72,34 @@ Per run (wall s / tool calls / cost USD):
 - **Terms box**: every tool's agent fell back to JavaScript at least once to scroll the terms box (bx 1 run, Playwright 1 run, DevTools all 3). DevTools runs also used `evaluate_script` to dispatch synthetic mouse events on combobox options and to set the date input, 10 JS workarounds across 3 runs. No agent wrote the app's internal `state` directly.
 - **Tool-definition overhead** (from a one-turn "Reply with ok" run per tool, `runs/smoke-*`): context before any work was 10,109 tokens with Playwright (25 tools), 13,336 with bx (33 tools) and 15,141 with DevTools (33 tools). bx's tool descriptions are about 3.2k tokens heavier than Playwright's.
 
+## After the paste fix (same day, later)
+
+The grid loss came from bx pasting text into a page that only reads key
+presses. bx then changed: after a paste it checks that the text arrived,
+and if not (a focused element that isn't a text field, or nothing focused
+right after the agent clicked something and the page didn't change) it
+types the text key by key itself. Typing into an element that can't take
+focus now clicks it first.
+
+Rerun of the grid task, bx and Playwright MCP three times each, back to
+back in the same hour (so not comparable with the timings above: the model
+answered more slowly then):
+
+| grid, median of 3 | bx before the fix | bx after | Playwright MCP, same hour |
+|---|---|---|---|
+| Success | 3/3 | 3/3 | 3/3 |
+| Tool calls | 12 | 10 | 7 |
+| Cost (USD) | 0.123 | 0.096 | 0.090 |
+| Wall time (s) | 29.1 | 33.7 | 30.8 (one run took 124) |
+
+The fix took out the agent's detour (reading the page's script and asking
+for key typing); Playwright MCP still needed fewer calls on this task.
+bx's remaining extra calls: `list_profiles` before `open` (which needs a
+profile name) and a separate `snapshot` after `open`. One wizard run on
+the new build also completed (27 calls, $0.29); the page's state beacon
+stopped posting once the window lost focus, so it was checked by reading
+the request from the browser instead (status Approved, right comment).
+
 ## Setup comparison
 
 | | bx | Playwright MCP | Chrome DevTools MCP |
