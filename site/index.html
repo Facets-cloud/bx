@@ -38,9 +38,10 @@
   nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
   .mark { font: 700 22px/1 "JetBrains Mono", monospace; letter-spacing: -0.05em; text-decoration: none; }
   .mark b { color: var(--acc); font-weight: 700; }
-  nav .links { display: flex; gap: 24px; font-size: 15px; }
+  nav .links { display: flex; gap: 24px; font-size: 15px; align-items: center; }
   nav .links a { color: var(--muted); text-decoration: none; }
   nav .links a:hover { color: var(--fg); }
+  .theme { font: 500 12px "JetBrains Mono", monospace; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; cursor: pointer; }
 
   /* Hero */
   .hero { position: relative; padding: 88px 0 64px; overflow: hidden; }
@@ -258,14 +259,14 @@
 <nav>
   <div class="wrap">
     <a class="mark" href="#"><b>b</b>x</a>
-    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#compare">Compared</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
+    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#compare">Compared</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a><button class="theme" id="theme" type="button" aria-label="Switch theme">auto</button></div>
   </div>
 </nav>
 
 <header class="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow"><i></i>MCP server · v0.3 · macOS</span>
+      <span class="eyebrow"><i></i>MCP server · v0.5 · macOS</span>
       <div class="expand" id="expand" aria-label="bx: browser exec"><span class="k">b</span><span class="rest">rowser</span><span class="gap"></span><span class="rest">e</span><span class="k">x</span><span class="rest">ec</span></div>
       <h1>Run your agent's commands in the browser you already have open.</h1>
       <p class="lede">Your profile, your tabs, your logins. Claude Code, Codex and Cursor can click through a page and read its console, network and storage, like you would in DevTools.</p>
@@ -561,6 +562,20 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
     });
     show(0);
   });
+
+  // Theme: auto (follows the system), light, dark
+  const themeBtn = document.getElementById("theme");
+  const THEMES = ["auto", "light", "dark"];
+  const setTheme = (t) => {
+    if (t === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.dataset.theme = t;
+    themeBtn.textContent = t;
+    try { localStorage.setItem("bx-theme", t); } catch {}
+  };
+  let saved = "auto";
+  try { saved = localStorage.getItem("bx-theme") || "auto"; } catch {}
+  setTheme(THEMES.includes(saved) ? saved : "auto");
+  themeBtn.addEventListener("click", () => setTheme(THEMES[(THEMES.indexOf(themeBtn.textContent) + 1) % 3]));
 
   // Real runs: the list picks what the player shows
   const runvid = document.getElementById("runvid");
