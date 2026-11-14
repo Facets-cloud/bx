@@ -24,6 +24,9 @@ type Tab struct {
 	ProfileDir string `json:"profile_dir"`
 	Title      string `json:"title"`
 	URL        string `json:"url"`
+	// Page is what open found on the page, as an interactive snapshot, so
+	// the agent can act without a snapshot call first.
+	Page []string `json:"page,omitempty"`
 }
 
 func (s *server) tabInfo(t *target.Info, names map[string]string) Tab {
@@ -44,12 +47,15 @@ func (s *server) profileNames() map[string]string {
 }
 
 func (s *server) resolveProfile(ref string) (browser.Profile, error) {
-	if ref == "" {
-		return browser.Profile{}, exit.New(exit.Validation, "--profile is required")
-	}
 	ps, err := s.b.Profiles()
 	if err != nil {
 		return browser.Profile{}, err
+	}
+	if ref == "" {
+		// No profile named: the one the user last used, else the first.
+		if ref = s.b.LastUsed(); ref == "" && len(ps) > 0 {
+			ref = ps[0].Dir
+		}
 	}
 	return browser.FindProfile(ps, ref)
 }

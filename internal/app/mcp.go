@@ -144,9 +144,11 @@ func handleMCP(m rpcMsg, tools []mcpTool, byName map[string]mcpTool) rpcMsg {
 const mcpInstructions = `bx drives the user's own running browser, in a named profile, with their logins. ` +
 	`If a call fails, run doctor. If remote debugging is off, ask the user to turn it on at the page doctor names ` +
 	`(such as brave://inspect/#remote-debugging), or, if they would rather you did it, to quit the browser so you can run setup. ` +
-	`Start with list_profiles or list_tabs, then snapshot a tab (interactive=true is several times smaller): each element gets a ref like e12 that ` +
-	`click, fill and the other actions accept. Work in few calls: once you understand the page, send the steps as one batch. ` +
-	`Name elements by role and name (button "Next") to plan across screens in one batch, since those wait for the element to appear. ` +
+	`Open a URL with open (profile is optional: it defaults to the one the user last used; name one when the task belongs to a ` +
+	`particular account, see list_profiles). open returns the page's interactive elements, each with a ref like e12. ` +
+	`An element argument takes a ref, a role and name as the page lists them (button "Next", or textbox "Name" #2 for the second, ` +
+	`which waits up to 10s to appear), or a CSS selector. Work in few calls: once you understand the page, send the steps as one batch; ` +
+	`role and name let one batch go across screens. Every tool also takes browser (default: the user's) and the waiting ones a timeout (default 30s). ` +
 	`Each action reports changes; after a big change it returns the new screen, so you rarely need another snapshot. ` +
 	`and get data out with one eval that returns only the fields you need. Begin a browser task with start (a short title), and when it is finished call done once with a short summary. Ask the user before submitting forms, sending messages, ` +
 	`buying or deleting. The first call after the browser starts makes it ask the user to Allow. ` +
@@ -236,10 +238,9 @@ func daemonCall(args map[string]any, op string, req map[string]string) (mcpConte
 // schema builds a JSON Schema object; every tool also takes browser and
 // timeout.
 func schema(props map[string]any, required []string) map[string]any {
-	all := map[string]any{
-		"browser": str("Browser to drive, such as brave or chrome. Default: the user's default."),
-		"timeout": str("How long to wait on the page, such as 10s. Default 30s."),
-	}
+	// browser and timeout are explained once, in the server instructions;
+	// repeated in full on every tool they cost about 1,700 tokens a turn.
+	all := map[string]any{"browser": str("Default: the user's.")}
 	for k, v := range props {
 		all[k] = v
 	}
@@ -258,11 +259,13 @@ func boolean(desc string) map[string]any {
 	return map[string]any{"type": "boolean", "description": desc}
 }
 
-const elDesc = "A ref from the tab's latest snapshot (such as e12); a role and name as a snapshot line shows them, such as button \"Next\" or textbox \"Name\" #2 for the second (bx waits up to 10s for it to appear); or a CSS selector."
+const elDesc = "Ref (e12), role and name (button \"Next\"), or CSS selector."
 
 var (
 	tabArg = str("Tab ID from list_tabs or open.")
 	elArg  = str(elDesc)
+	// waitArg is the timeout, on the tools that wait on a page.
+	waitArg = str("How long to wait, such as 10s. Default 30s.")
 )
 
 func mcpTools() []mcpTool {
@@ -275,10 +278,8 @@ func readTools() []mcpTool {
 	return []mcpTool{
 		{Name: "list_profiles", Description: "List the browser's profiles (display name and folder).",
 			InputSchema: schema(nil, nil), run: listProfilesTool},
-		{Name: "history", Description: "What bx did, from its local audit log (last 30 days). Without session: the recent sessions, " +
-			"each with its time, title, action count and sites. With session (current, previous or an id from that list): " +
-			"that session from start to end as a tree: its tasks (start to done), the pages each worked on, and each action " +
-			"with its result. Inside Claude Code or Codex, a session is the app's own session. Typed values are not logged.",
+		{Name: "history", Description: "What bx did, from its local log. Without session: recent sessions. With session " +
+			"(current, previous or an id): that session as tasks, pages and actions with results. Typed values are not logged.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 				"session": str("current, previous, or a session id. Omit to list sessions."),
 				"limit":   map[string]any{"type": "integer", "description": "At most this many sessions, or a session's last this many tasks."}}},
@@ -304,11 +305,8 @@ func readTools() []mcpTool {
 				}
 				return mcpContent{text: daemon.FormatSettings(daemon.LoadConfig().Settings())}, nil
 			}},
-		{Name: "pins", Description: "Pinned tasks: tasks saved from bx's history so you can do them again. " +
-			"action list (default) shows them; show with name gives a pin's steps, page by page, to follow again " +
-			"(ask the user for values: they were never logged); pin saves a task from a session under a name " +
-			"(session: current, previous or an id from history; task: its number in history's tree, default the last titled task); " +
-			"unpin deletes a pin. Pin when the user asks to save or repeat a task later.",
+		{Name: "pins", Description: "Tasks saved to do again. list (default); show: a pin's steps page by page, to follow with values " +
+			"you ask the user for (none were logged); pin: save a session's task (default its last titled one) under a name; unpin.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 				"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "pin", "unpin"}},
 				"name":    str("The pin's name, such as Onboard vendor."),
@@ -317,9 +315,9 @@ func readTools() []mcpTool {
 			run: func(args map[string]any) (mcpContent, error) { return pinsTool(args) }},
 		opTool("list_tabs", "List open tabs, optionally only those of one profile.", "tabs",
 			map[string]any{"profile": str("Profile name or folder, exact.")}, nil, map[string]string{"profile": "profile"}),
-		opTool("open", "Open a URL in a new tab of the named profile; returns the tab.", "open",
-			map[string]any{"url": str("http(s), file or about URL."), "profile": str("Profile name or folder, exact.")},
-			[]string{"url", "profile"}, map[string]string{"url": "url", "profile": "profile"}),
+		opTool("open", "Open a URL in a new tab; returns the tab and the page's interactive elements.", "open",
+			map[string]any{"url": str("http(s), file or about URL."), "profile": str("Profile name or folder. Default: the one last used."), "timeout": waitArg},
+			[]string{"url"}, map[string]string{"url": "url", "profile": "profile"}),
 		{Name: "snapshot", Description: "The tab's elements as an indented accessibility tree; each gets a ref like e12 for the actions. " +
 			"Prefer this to a screenshot. On a big page, pass interactive for only what can be clicked or typed in (plus headings), " +
 			"or within a ref for one part of the page.",
@@ -337,7 +335,7 @@ func readTools() []mcpTool {
 			map[string]any{"tab": tab, "script": str("JavaScript expression or function.")}, []string{"tab", "script"},
 			map[string]string{"tab": "tab", "script": "script"}),
 		opTool("wait", "Wait until text appears, or an element is visible (or, with gone, is not).", "wait",
-			map[string]any{"tab": tab, "text": str("Text to wait for."), "selector": el, "gone": boolean("Wait for it to disappear.")},
+			map[string]any{"tab": tab, "text": str("Text to wait for."), "selector": el, "gone": boolean("Wait for it to disappear."), "timeout": waitArg},
 			[]string{"tab"}, map[string]string{"tab": "tab", "text": "text", "selector": "selector", "gone": "gone"}),
 		opTool("console", "The tab's console messages, uncaught exceptions and failed loads, with where they came from. "+
 			"Recorded from the first time bx touched the tab (earlier console messages are included). "+
@@ -434,7 +432,7 @@ func actTools() []mcpTool {
 	tab, el := tabArg, elArg
 	return []mcpTool{
 		opTool("goto", "Navigate the tab to a URL, or back, forward or reload.", "goto",
-			map[string]any{"tab": tab, "url": str("A URL, or back, forward or reload.")}, []string{"tab", "url"},
+			map[string]any{"tab": tab, "url": str("A URL, or back, forward or reload."), "timeout": waitArg}, []string{"tab", "url"},
 			map[string]string{"tab": "tab", "url": "url"}),
 		opTool("click", "Click an element. Reports navigation, new tabs and dialogs.", "click",
 			map[string]any{"tab": tab, "element": el, "double": boolean("Double-click.")}, []string{"tab", "element"},
@@ -450,15 +448,14 @@ func actTools() []mcpTool {
 				"items": map[string]any{"type": "object", "required": []string{"element", "value"},
 					"properties": map[string]any{"element": el, "value": str("The value.")}}}}, []string{"tab", "fields"}),
 			run: fillTool},
-		{Name: "batch", Description: "Run several actions on one tab in one call, in order: understand the page with snapshot first, " +
-			"then send the steps you would otherwise send one by one. Each step waits for the page to settle. " +
-			"Stops at the first failure or dialog and reports how many steps ran. Refs go stale after a step navigates.",
-			InputSchema: schema(map[string]any{"tab": tab, "steps": map[string]any{
+		{Name: "batch", Description: "Run several actions on one tab in one call, in order; each waits for the page to settle. " +
+			"Stops at the first failure or dialog and says how many ran. Refs go stale after a step navigates.",
+			InputSchema: schema(map[string]any{"tab": tab, "timeout": waitArg, "steps": map[string]any{
 				"type": "array", "description": "Steps in order.",
 				"items": map[string]any{"type": "object", "required": []string{"action"},
 					"properties": map[string]any{
 						"action":  map[string]any{"type": "string", "enum": []string{"click", "hover", "fill", "type", "key", "goto", "wait", "upload", "scroll"}},
-						"element": str(elDesc + " For click, hover, fill, wait, upload, scroll (its content to the end) and type (focused first)."),
+						"element": str("For click, hover, fill, wait, upload, scroll and type."),
 						"value":   str("For fill."),
 						"text":    str("For type, or the text wait waits for."),
 						"submit":  str("For type: a key to press after, such as Enter."),
@@ -469,10 +466,9 @@ func actTools() []mcpTool {
 						"files": map[string]any{"type": "array", "items": map[string]any{"type": "string"},
 							"description": "For upload: absolute file paths for the file input element."}}}}}, []string{"tab", "steps"}),
 			run: batchTool},
-		opTool("type", "Put text into an element (clicked first) or into whatever has focus, then optionally press a key such as Enter. "+
-			"It pastes the text in one go, which rich text editors, autocompletes and canvas apps accept; with BX_TYPING=keys in the server's environment it types key by key. "+
-			"Use it where text goes into something that isn't a plain field; use fill for plain form fields.", "type",
-			map[string]any{"tab": tab, "element": str(elDesc + " Default: whatever has focus."), "text": str("Text to type."), "submit": str("Key to press after, such as Enter.")},
+		opTool("type", "Type text into an element (clicked first) or what has focus, then optionally press a key. "+
+			"For editors, autocompletes and grids; fill is for plain fields. A page that ignores pasted text gets it key by key.", "type",
+			map[string]any{"tab": tab, "element": str("Default: what has focus."), "text": str("Text to type."), "submit": str("Key to press after, such as Enter.")},
 			[]string{"tab", "text"}, map[string]string{"tab": "tab", "element": "selector", "text": "text", "submit": "submit"}),
 		opTool("key", "Press a key or combination: Enter, Escape, Tab, ArrowDown, Meta+a.", "key",
 			map[string]any{"tab": tab, "key": str("Key or combination.")}, []string{"tab", "key"},
@@ -486,11 +482,8 @@ func actTools() []mcpTool {
 			map[string]any{"tab": tab, "action": map[string]any{"type": "string", "enum": []string{"accept", "dismiss"}},
 				"text": str("Reply for a prompt.")}, []string{"tab", "action"},
 			map[string]string{"tab": "tab", "action": "action", "text": "text"}),
-		opTool("start", "Call this first when you begin a browser task for the user. title names the task on the page's pointer, "+
-			"such as \"Onboard Lumen Analytics\"; between your calls the pointer shows \"Working on: <title>\". "+
-			"mode and typing set how bx acts for this task: fast (default) or watch (human pace, when the user wants to watch or follow along); "+
-			"paste (default) or keys (key by key, when a site ignores pasted text). Set them from what the user asks for. "+
-			"To change them mid-task, call start again with the same title.", "start",
+		opTool("start", "Call first in a browser task; the page's pointer shows the title between your calls. "+
+			"mode watch: human pace, when the user wants to watch. typing keys: key by key. Call again to change them.", "start",
 			map[string]any{"title": str("The task, in a few words."),
 				"mode":   map[string]any{"type": "string", "enum": []string{"fast", "watch"}},
 				"typing": map[string]any{"type": "string", "enum": []string{"paste", "keys"}}},

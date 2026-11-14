@@ -200,6 +200,9 @@ func (s *server) dispatch(req Request) (any, error) {
 		if err == nil && a["follow"] == "true" {
 			_, _ = s.front(tab.ID)
 		}
+		if err == nil {
+			tab.Page = s.changes(tab.ID)
+		}
 		return tab, err
 	case "show":
 		return s.show(a["tab"])

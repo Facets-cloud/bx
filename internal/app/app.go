@@ -58,7 +58,8 @@ logged before that are included):
                                     each also takes off; lasts until bx stop
 
 Act (each waits for the page to settle and reports navigation, new tabs, dialogs):
-  bx open <url> --profile <name>
+  bx open <url> [--profile <name>]  default: the profile you last used; prints the
+                                    tab and the page's interactive elements
   bx goto <tab> <url|back|forward|reload>
   bx click <tab> <el> [--double]
   bx hover <tab> <el>

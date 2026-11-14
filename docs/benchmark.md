@@ -100,6 +100,37 @@ the new build also completed (27 calls, $0.29); the page's state beacon
 stopped posting once the window lost focus, so it was checked by reading
 the request from the browser instead (status Approved, right comment).
 
+## Round 3: fewer calls and a smaller tool list
+
+What the grid runs above showed bx spending calls on, and the change:
+
+- `list_profiles` before every `open`, because `open` required a profile.
+  `open` now defaults to the profile the user last used.
+- A `snapshot` right after `open` (sometimes after guessing the tab id).
+  `open` now returns the page's interactive elements.
+- About 1,700 tokens a turn for `browser` and `timeout`, described in full
+  on all 34 tools, and about 600 for the element description on ten of
+  them. Both are now explained once in the server instructions; `timeout`
+  stays only on `open`, `goto`, `wait` and `batch`. Context before any
+  work went from 13,336 tokens to 11,087 (Playwright MCP: 10,109).
+
+bx and Playwright MCP, three rounds, each round running both tools at the
+same time; every run passed the checker:
+
+| median of 3 | bx | Playwright MCP |
+|---|---|---|
+| grid: wall time (s) | 21.0 | 21.8 |
+| grid: tool calls | 7 | 6 |
+| grid: cost (USD) | 0.077 | 0.093 |
+| wizard: wall time (s) | 55.4 | 84.2 |
+| wizard: tool calls | 24 | 62 |
+| wizard: cost (USD) | 0.274 | 0.538 |
+
+Per run (wall s / calls / cost): grid bx 21/7/0.078, 24/7/0.075, 19/7/0.077;
+grid Playwright 21/6/0.073, 22/6/0.098, 22/4/0.093; wizard bx 60/27/0.284,
+54/24/0.258, 55/24/0.274; wizard Playwright 84/69/0.538, 71/61/0.448,
+105/62/0.605. Chrome DevTools MCP wasn't rerun.
+
 ## Setup comparison
 
 | | bx | Playwright MCP | Chrome DevTools MCP |

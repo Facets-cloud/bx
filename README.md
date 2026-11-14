@@ -239,21 +239,21 @@ the agent app after changing its config.
 ## Compared with Playwright MCP and Chrome DevTools MCP
 
 The same agent (Claude Opus 5.5) did a 6-step vendor onboarding form
-three times with each tool; every run finished it. Medians:
+three times with each tool, side by side; every run finished it. Medians:
 
 | | bx | Playwright MCP | Chrome DevTools MCP |
 | --- | --- | --- | --- |
-| Time | 61 s | 106 s | 112 s |
-| Tool calls | 27 | 63 | 55 |
-| Model cost | $0.29 | $0.56 | $0.59 |
+| Time | 55 s | 84 s | 112 s |
+| Tool calls | 24 | 62 | 55 |
+| Model cost | $0.27 | $0.54 | $0.59 |
 | MCP server memory | 29 MB (about 95 MB through npx) | 251 MB | 290 MB |
 
-On a spreadsheet that only takes key presses, Playwright MCP needed fewer
-calls. bx pastes text by default; the page ignored it until the agent
-switched to key-by-key typing. bx now checks that a paste took and types
-the text itself when it didn't: that cut its calls from 12 to 10 and its
-cost from $0.12 to $0.10, against 7 calls and $0.09 for Playwright MCP
-run at the same time. Prompts, method and every number are in
+Chrome DevTools MCP figures are from the first round. On a spreadsheet
+that only takes key presses, bx used to lose: it pasted text the page
+ignored. Now it checks that a paste took and types the text itself when it
+didn't, `open` returns the page without a profile lookup, and the tool
+list is a quarter smaller. There bx went from 12 calls and $0.12 to 7 calls
+and $0.08, against 6 calls and $0.09 for Playwright MCP, at the same speed. Prompts, method and every number are in
 [docs/benchmark.md](docs/benchmark.md).
 
 ## Fewer calls, faster runs

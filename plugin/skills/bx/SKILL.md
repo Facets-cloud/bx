@@ -37,7 +37,9 @@ action as something the user did with their own hands.
 ```
 bx list profiles
 bx list tabs [--profile <name>]
-bx open <url> --profile <name>            # prints the new tab's ID
+bx open <url> [--profile <name>]          # the new tab's ID and the page's interactive
+                                          # elements; profile defaults to the one last used.
+                                          # Name one when the task belongs to a particular account.
 bx show tab <id>
 bx snapshot <tab> [--out <file>]          # elements with refs: e12 button "Save"
           [--interactive] [--within <ref>]  # only controls and headings; one part of the page
