@@ -221,9 +221,12 @@ win.
 | `BX_TYPING` | `paste`, `keys` | `paste` |
 | `BX_BROWSER` | `brave`, `chrome`, `brave-agent`, ... | see `bx use` |
 
-Claude Code: `claude mcp add -s user bx -e BX_MODE=watch -- npx -y @facets-cloud/bx mcp`
-(run `claude mcp remove bx -s user` first to change an existing install).
-Codex, in `~/.codex/config.toml`:
+With the Claude Code or Codex plugin, the MCP server reads the
+environment the app starts with: `export BX_MODE=watch` in your shell
+profile, then restart the app. If you added bx with `claude mcp add`
+instead, pass it there: `claude mcp add -s user bx -e BX_MODE=watch -- npx
+-y @facets-cloud/bx mcp`. Codex without the plugin takes it in
+`~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.bx]

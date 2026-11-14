@@ -464,7 +464,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
     <div class="kicker">// setup</div>
     <h2>Three steps, once per browser.</h2>
     <div class="steps">
-      <div class="step"><h3>Add the MCP server</h3><p>Claude Code: the command at the top, or the plugin, which adds the skill too: <code>claude plugin marketplace add Facets-cloud/bx &amp;&amp; claude plugin install bx@bx</code>. Codex: <code>codex mcp add bx -- npx -y @facets-cloud/bx mcp</code>. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>.</p></div>
+      <div class="step"><h3>Install the plugin</h3><p>Claude Code and Codex: the command at the top. It brings the MCP server and the skill, and updates with the plugin manager. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>. Any other MCP app: <code>npx -y @facets-cloud/bx mcp</code>.</p></div>
       <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open this page in your browser and switch it on.</p>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
@@ -510,23 +510,22 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   // Install tabs: a command per client, or a prompt any agent can follow
   const PROMPT = `Install bx (browser exec, npm package @facets-cloud/bx) for me. It's an MCP server that lets you drive my running Chromium browser in a profile I name.
 
-1. Add it as an MCP server for the app you're running in:
-   - Claude Code: claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp
-   - Codex: codex mcp add bx -- npx -y @facets-cloud/bx mcp
-   - Claude Desktop or Cursor: npx -y @facets-cloud/bx mcp install
+1. Install it for the app you're running in:
+   - Claude Code, as a plugin (MCP server and skill): claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
+   - Codex, as a plugin: codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
+   - Claude Desktop or Cursor, as an MCP server: npx -y @facets-cloud/bx mcp install
 2. Ask which browser I use, and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
 3. If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
-4. Ask whether I want bx at human pace. Fast mode is the default: a "bx" pointer shows each action, with no pacing. Watch mode slows it to human pace; for it, add BX_MODE=watch to the server's env in step 1. If a site ignores pasted text, BX_TYPING=keys makes bx type key by key.
+4. Ask whether I want bx at human pace. Fast mode is the default: a "bx" pointer shows each action, with no pacing. Watch mode slows it to human pace; for it, set BX_MODE=watch in the environment the app starts with (for Claude Code or Codex, export it in my shell profile). If a site ignores pasted text, BX_TYPING=keys makes bx type key by key.
 5. Tell me to restart this app, then run the bx doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
   const TABS = [
-    ["Claude Code", "claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp", "Then turn on remote debugging and click Allow once."],
-    ["Codex", "codex mcp add bx -- npx -y @facets-cloud/bx mcp", "Then turn on remote debugging and click Allow once."],
+    ["Claude Code", "claude plugin marketplace add Facets-cloud/bx\nclaude plugin install bx@bx", "The plugin brings the MCP server and the skill, and keeps them updated. Restart Claude Code, turn on remote debugging, click Allow once."],
+    ["Codex", "codex plugin marketplace add Facets-cloud/bx\ncodex plugin add bx@bx", "The plugin brings the MCP server and the skill. Start a new Codex session, turn on remote debugging, click Allow once."],
     ["Cursor / Desktop", "npx -y @facets-cloud/bx mcp install", "Adds bx to Claude Desktop and Cursor if they're installed."],
     ["Ask your agent", PROMPT, "Paste this into any agent. It installs bx and walks you through the rest."],
   ];
   const MODE_TABS = [
-    ["Claude Code", "claude mcp remove bx -s user\nclaude mcp add -s user bx -e BX_MODE=watch -- npx -y @facets-cloud/bx mcp", "Swap or add -e BX_TYPING=keys. Restart Claude Code after."],
-    ["Codex", '[mcp_servers.bx]\ncommand = "npx"\nargs = ["-y", "@facets-cloud/bx", "mcp"]\nenv = { BX_MODE = "watch" }', "In ~/.codex/config.toml. Restart Codex after."],
+    ["Claude Code / Codex", "export BX_MODE=watch     # in your shell profile\nexport BX_TYPING=keys    # optional", "The plugin's MCP server reads the environment the app starts with. Restart Claude Code or Codex after."],
     ["Cursor / Desktop", '{ "mcpServers": { "bx": {\n  "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"],\n  "env": { "BX_MODE": "watch" } } } }', "The bx entry in ~/.cursor/mcp.json or claude_desktop_config.json."],
     ["CLI", "export BX_MODE=watch        # in your shell profile\nBX_MODE=watch bx batch $id --file steps.json   # or for one command", "The CLI and the agent skill read your shell's environment."],
   ];
