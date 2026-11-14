@@ -159,6 +159,14 @@ Code or Codex a bx session is the app's own session. Over MCP it is the
 `bx config` (MCP: `settings`); you may raise retention when the user asks,
 but lowering logging is the user's call: give them the command.
 
+Pins are tasks saved to repeat. When the user says "pin that as <name>",
+run `bx history pin current "<name>"` (MCP: `pins` with action pin). When
+they ask to do a pinned task again, read it with `bx history pinned
+"<name>"` (MCP: `pins` action show), ask them for every value the steps
+fill or choose (values are never logged), then go through its pages in
+order: snapshot each and run its steps, in one batch where you can. If a
+page changed, do what the step meant rather than failing.
+
 - Fast mode, the default: the pointer hops to each element and there is
   no pacing.
 - `BX_MODE=watch`, for a person following along: the pointer glides and

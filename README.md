@@ -113,8 +113,10 @@ long it took. Only you can read the files (mode 0600).
 It leaves out what was typed and what a link carries. A fill shows the
 field (`fill textbox "Password"`), never the value; typed text and `eval`
 scripts show only their length. URLs are logged without their query
-string or `#` fragment, where sign-in codes, reset tokens and session ids
-travel, so the log keeps `app.example.com/reset`, never what follows `?`.
+string, where sign-in codes, reset tokens and session ids travel, so the
+log keeps `app.example.com/reset`, never what follows `?`. A `#` part
+with `key=value` pairs (`#access_token=…`) is dropped too; one without
+(`#/settings`, `#inbox`) is how some apps name the page, so it stays.
 `bx config set log.values full` logs values and whole URLs, for
 debugging, and `log.values off` turns logging off. These live only in
 bx's config file, so an agent can't switch logging off for its own
@@ -141,6 +143,31 @@ log: ~/Library/Application Support/bx/sessions/bx-4c1e9a07d2f3.jsonl
 ```
 
 `done` returns the session's log file too.
+
+Elements are logged the way you'd name them, `button "Next"` or
+`textbox "Email"`, not as snapshot refs like `e12`, which mean nothing
+once the page is gone.
+
+#### Pinned tasks: do it again
+
+When a task is worth repeating (onboarding a vendor, filing a weekly
+report), pin it. Tell your agent "pin that as Onboard vendor", or run:
+
+```sh
+bx history pin previous "Onboard vendor"   # the session's last titled task
+bx history pin bx-4c1e9a07d2f3 "Weekly report" --task 2
+bx history pinned                          # list pins
+bx history pinned "Onboard vendor"         # its steps, page by page
+bx history unpin "Onboard vendor"
+```
+
+Later, say "do the Onboard vendor pin for Lumen Analytics". The agent
+reads the pin's steps with the `pins` tool, asks you for anything to type
+or choose (values were never logged), then goes through the pages in
+order, snapshotting each and running its steps. It follows the steps the
+way a person follows notes, so a moved button doesn't break it. Pins are
+copies kept in `~/Library/Application Support/bx/pins/`, so the log's
+limits never remove them.
 
 Session ids start with `bx-`. Inside Claude Code or Codex, bx derives the
 id from the app's own session, so the MCP server and every CLI command in
@@ -208,6 +235,23 @@ env = { BX_MODE = "watch" }
 Claude Desktop, Cursor and other MCP apps take an `env` object in the
 server entry. The CLI reads your shell: `export BX_MODE=watch`. Restart
 the agent app after changing its config.
+
+## Compared with Playwright MCP and Chrome DevTools MCP
+
+The same agent (Claude Opus 5.5) did a 6-step vendor onboarding form
+three times with each tool; every run finished it. Medians:
+
+| | bx | Playwright MCP | Chrome DevTools MCP |
+| --- | --- | --- | --- |
+| Time | 61 s | 106 s | 112 s |
+| Tool calls | 27 | 63 | 55 |
+| Model cost | $0.29 | $0.56 | $0.59 |
+| MCP server memory | 29 MB (about 95 MB through npx) | 251 MB | 290 MB |
+
+On a spreadsheet that only takes key presses, Playwright MCP was a little
+faster and cheaper: bx pastes text by default and the agent had to switch
+to key-by-key typing. Prompts, method and every number are in
+[docs/benchmark.md](docs/benchmark.md).
 
 ## Fewer calls, faster runs
 
@@ -318,9 +362,9 @@ Then give your terminal app Full Disk Access, quit the browser, and run
 ### Use it as an MCP server
 
 bx is also a Model Context Protocol server, and MCP can be the only way you
-use it. `bx mcp` serves 33 tools on stdio: setup (`doctor`,
+use it. `bx mcp` serves 34 tools on stdio: setup (`doctor`,
 `list_browsers`, `setup`, `launch`, `settings`), reading (`list_profiles`,
-`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`, `history`), acting
+`list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait`, `history`, `pins`), acting
 (`open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`,
 `upload`, `dialog`, `close_tab`, `batch`, `start`, `done`) and debugging (`console`, `network`,
 `storage`, `performance`, `emulate`, `cdp`). They forward to the same background

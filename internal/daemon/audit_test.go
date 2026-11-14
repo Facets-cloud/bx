@@ -19,7 +19,7 @@ func TestDescribeLeavesOutTypedValues(t *testing.T) {
 			"3 steps: fill e3; key Enter; goto https://a.test/"},
 	}
 	for _, c := range cases {
-		got := describe(c.op, c.a, false)
+		got := describe(c.op, c.a, false, nil)
 		if got != c.want {
 			t.Errorf("%s: got %q, want %q", c.op, got, c.want)
 		}
@@ -29,7 +29,7 @@ func TestDescribeLeavesOutTypedValues(t *testing.T) {
 			}
 		}
 	}
-	if got := describe("fill", cases[0].a, true); !strings.Contains(got, "hunter2") {
+	if got := describe("fill", cases[0].a, true, nil); !strings.Contains(got, "hunter2") {
 		t.Errorf("full logging left the value out: %q", got)
 	}
 }
@@ -71,19 +71,32 @@ func TestSessionIDFollowsTheHarness(t *testing.T) {
 
 func TestCleanURLKeepsOnlyThePage(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://app.test/reset?token=abc123#step2":    "https://app.test/reset",
-		"https://user:pw@mail.test/inbox?ik=1&view=pt": "https://mail.test/inbox",
-		"https://example.com/":                         "https://example.com/",
-		"":                                             "",
+		"https://app.test/reset?token=abc123#step2":          "https://app.test/reset#step2",
+		"https://app.test/cb#access_token=xyz&expires_in=60": "https://app.test/cb",
+		"http://localhost:8770/#/review":                     "http://localhost:8770/#/review",
+		"https://user:pw@mail.test/inbox?ik=1&view=pt":       "https://mail.test/inbox",
+		"https://example.com/":                               "https://example.com/",
+		"":                                                   "",
 	} {
 		if got := cleanURL(in); got != want {
 			t.Errorf("cleanURL(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if got := describe("goto", map[string]string{"url": "https://a.test/cb?code=xyz"}, false); got != "https://a.test/cb" {
+	if got := describe("goto", map[string]string{"url": "https://a.test/cb?code=xyz"}, false, nil); got != "https://a.test/cb" {
 		t.Errorf("goto target kept the query: %q", got)
 	}
-	if got := describe("batch", map[string]string{"steps": `[{"action":"goto","url":"https://a.test/?sid=9"}]`}, false); strings.Contains(got, "sid") {
+	if got := describe("batch", map[string]string{"steps": `[{"action":"goto","url":"https://a.test/?sid=9"}]`}, false, nil); strings.Contains(got, "sid") {
 		t.Errorf("batch goto kept the query: %q", got)
+	}
+}
+
+func TestRefsAreLoggedByName(t *testing.T) {
+	names := map[string]string{"e12": `button "Next"`, "e4": `textbox "Email"`}
+	if got := describe("click", map[string]string{"selector": "e12"}, false, names); got != `button "Next"` {
+		t.Errorf("click logged %q", got)
+	}
+	got := describe("batch", map[string]string{"steps": `[{"action":"fill","element":"e4","value":"a@b.c"},{"action":"click","element":"e12"},{"action":"click","element":"#go"}]`}, false, names)
+	if want := `3 steps: fill textbox "Email"; click button "Next"; click #go`; got != want {
+		t.Errorf("batch logged %q, want %q", got, want)
 	}
 }

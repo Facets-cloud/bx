@@ -92,6 +92,11 @@ Session (one agent's task: the on-page pointer shows its title between calls):
   bx history [<session>|current|previous] [--limit <n>]
                                     what bx did: recent sessions, or one session
                                     from start to end (tasks, pages, actions)
+  bx history pin <session> "<name>" [--task <n>]
+                                    save a task (default: the session's last titled one)
+                                    to do again later; pins are never deleted
+  bx history pinned [<name>]        list pins, or show one as steps to follow again
+  bx history unpin <name>
   bx config                         the log settings: log.values, log.days, log.max,
                                     log.archive_max, with their defaults
   bx config set <key> <value>       change one, such as bx config set log.days 365

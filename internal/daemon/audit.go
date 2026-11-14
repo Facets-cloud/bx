@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/chromedp/cdproto/target"
 )
 
 // Every request an agent sends is written to a local audit log, one JSON
@@ -78,7 +80,7 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 		return
 	}
 	e := Entry{T: time.Now().Add(-took), Session: a["session"], Harness: a["harness"], HSess: a["harness_session"], Project: a["project"], Title: title, Browser: s.b.Name,
-		Tab: a["tab"], Op: req.Op, Target: describe(req.Op, a, values == "full"), MS: took.Milliseconds()}
+		Tab: a["tab"], Op: req.Op, Target: describe(req.Op, a, values == "full", req.names), MS: took.Milliseconds()}
 	if err != nil {
 		e.Error = errorResponse(err).Error
 	}
@@ -139,9 +141,31 @@ func writeEntry(e Entry) {
 	_, _ = f.Write(append(append(out, line...), '\n'))
 }
 
+// refNames is the tab's refs as role and name, as of its latest snapshot.
+func (s *server) refNames(tab string) map[string]string {
+	s.mu.Lock()
+	sess := s.sessions[target.ID(tab)]
+	s.mu.Unlock()
+	if sess == nil {
+		return nil
+	}
+	m, _ := sess.named.Load().(map[string]string)
+	return m
+}
+
+// named turns a ref such as e12 into the element it stood for, such as
+// button "Next", so the log reads the same tomorrow, when refs mean
+// nothing; anything else (a role and name, a CSS selector) stays as given.
+func named(el string, names map[string]string) string {
+	if n, ok := names[el]; ok {
+		return n
+	}
+	return el
+}
+
 // describe says what a request acted on, leaving out what was typed
-// unless full is set.
-func describe(op string, a map[string]string, full bool) string {
+// unless full is set. Elements are logged by role and name (see named).
+func describe(op string, a map[string]string, full bool, names map[string]string) string {
 	secret := func(label, v string) string {
 		if full {
 			return fmt.Sprintf("%s %q", label, v)
@@ -155,28 +179,28 @@ func describe(op string, a map[string]string, full bool) string {
 		}
 		return cleanURL(a["url"])
 	case "click", "hover", "read", "screenshot":
-		return a["selector"]
+		return named(a["selector"], names)
 	case "wait":
 		if a["text"] != "" {
 			return fmt.Sprintf("text %q", a["text"])
 		}
-		return a["selector"]
+		return named(a["selector"], names)
 	case "type":
-		return strings.TrimSpace(a["selector"] + " " + secret("text", a["text"]))
+		return strings.TrimSpace(named(a["selector"], names) + " " + secret("text", a["text"]))
 	case "fill":
-		return describeFill(a["pairs"], full)
+		return describeFill(a["pairs"], full, names)
 	case "batch":
-		return describeBatch(a["steps"], full)
+		return describeBatch(a["steps"], full, names)
 	case "eval":
 		return secret("script", a["script"])
 	case "key":
 		return a["keys"]
 	case "drag":
-		return a["from"] + " -> " + a["to"]
+		return named(a["from"], names) + " -> " + named(a["to"], names)
 	case "upload":
 		var files []string
 		_ = json.Unmarshal([]byte(a["files"]), &files)
-		return fmt.Sprintf("%s, %d files", a["selector"], len(files))
+		return fmt.Sprintf("%s, %d files", named(a["selector"], names), len(files))
 	case "dialog":
 		return a["action"]
 	case "start":
@@ -193,21 +217,22 @@ func describe(op string, a map[string]string, full bool) string {
 	return ""
 }
 
-func describeFill(pairs string, full bool) string {
+func describeFill(pairs string, full bool, names map[string]string) string {
 	var ps [][2]string
 	_ = json.Unmarshal([]byte(pairs), &ps)
 	var out []string
 	for _, p := range ps {
+		el := named(p[0], names)
 		if full {
-			out = append(out, fmt.Sprintf("%s = %q", p[0], p[1]))
+			out = append(out, fmt.Sprintf("%s = %q", el, p[1]))
 		} else {
-			out = append(out, p[0])
+			out = append(out, el)
 		}
 	}
 	return strings.Join(out, ", ")
 }
 
-func describeBatch(steps string, full bool) string {
+func describeBatch(steps string, full bool, names map[string]string) string {
 	var ss []Step
 	_ = json.Unmarshal([]byte(steps), &ss)
 	out := []string{fmt.Sprintf("%d steps:", len(ss))}
@@ -224,7 +249,7 @@ func describeBatch(steps string, full bool) string {
 			d += " " + st.Key
 		default:
 			if st.Element != "" {
-				d += " " + st.Element
+				d += " " + named(st.Element, names)
 			}
 			if full && (st.Value != "" || st.Text != "") {
 				d += fmt.Sprintf(" = %q", st.Value+st.Text)
@@ -246,8 +271,10 @@ func host(u string) string {
 }
 
 // cleanURL drops what a URL can carry besides the page: the query string
-// and fragment (sign-in codes, reset tokens, session ids) and any
-// user:password. Logs may be kept for years, so they keep only the page.
+// (sign-in codes, reset tokens, session ids), any user:password, and a
+// fragment holding key=value pairs (#access_token=...). A fragment without
+// one is the page in an app that routes by it (#/settings, #inbox), so it
+// stays. Logs may be kept for years, so they keep only the page.
 func cleanURL(raw string) string {
 	if raw == "" {
 		return raw
@@ -258,7 +285,10 @@ func cleanURL(raw string) string {
 		raw, _, _ = strings.Cut(raw, "#")
 		return raw
 	}
-	u.User, u.RawQuery, u.ForceQuery, u.Fragment, u.RawFragment = nil, "", false, "", ""
+	u.User, u.RawQuery, u.ForceQuery = nil, "", false
+	if strings.Contains(u.Fragment, "=") {
+		u.Fragment, u.RawFragment = "", ""
+	}
 	return u.String()
 }
 

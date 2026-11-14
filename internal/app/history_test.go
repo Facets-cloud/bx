@@ -22,8 +22,8 @@ func TestSessionTreeGroupsTasksAndPages(t *testing.T) {
 	out := sessionTree(info, es, "", 0)
 	for _, want := range []string{
 		"resume: claude --resume 0b1c-uuid",
-		`├─ (untitled)`,
-		`└─ "Fill the form"`,
+		`├─ 1 (untitled)`,
+		`└─ 2 "Fill the form"`,
 		`2 actions, 1 failed  done: "Filled, not sent"`,
 		`click button "Next"  ok 0s  -> a.test/2`,
 		"Work  a.test/2",

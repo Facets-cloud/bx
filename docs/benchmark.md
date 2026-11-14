@@ -1,0 +1,161 @@
+# bx vs Playwright MCP vs Chrome DevTools MCP
+
+Measured 2026-11-14 on an Apple M5 MacBook (16 GB, macOS 27.2.1). Each tool ran the same two tasks 3 times through `claude -p` (Claude Code 2.1.325, model claude-opus-5-5), with only that tool's MCP server loaded and no built-in tools. All 18 runs reached the checked end state. Every number in the tables is a median of 3 runs unless the row says otherwise.
+
+Versions: bx built from `~/dev/work/facets/bx` at commit 986c73d, driving its agent browser (Brave 157.1.99.57). `@playwright/mcp@0.0.85` (playwright 1.66.0-alpha-2026-11-09) and `chrome-devtools-mcp@1.13.0`, both launching the installed Google Chrome 157.0.8103.79.
+
+## Tasks
+
+- **grid**: type a 4x3 table into `uc-grid/index.html`, a spreadsheet that only takes key presses (it ignores pasted text). Pass means cells A1 to C4 hold exactly the 12 values and no other cell has text.
+- **wizard**: complete the 6-step vendor onboarding in `uc-wizard/index.html`, then approve the request in the Approvals inbox. The steps include a country combobox, a shadow-DOM bank form, a PDF upload, a terms box that must be scrolled to the end, a rich-text editor inside a shadow-root modal, an approver autocomplete whose suggestions arrive after 600 ms, and a confirm modal. Pass means the stored request has status Approved, the right approvers, route, due date and approval comment, and only one request was submitted.
+
+The pages are copies of the bx-demo pages with one script added before `</body>`. Every 300 ms the script posts the grid cells and `localStorage.reqs` to the bench's local server, which writes them to `states/<run>.jsonl`. `scripts/check.py` grades the last state posted before the agent exited, so the pass/fail column doesn't depend on what the agent says it did.
+
+
+### grid
+
+| Metric (median of 3) | bx | Playwright MCP | Chrome DevTools MCP |
+|---|---|---|---|
+| Success | 3/3 | 3/3 | 3/3 |
+| Wall time (s) | 29.1 | 27.3 | 31.5 |
+| Turns | 13 | 8 | 31 |
+| Tool calls | 12 | 7 | 30 |
+| Input tokens (uncached) | 22 | 14 | 16 |
+| Cache write tokens | 6,293 | 5,534 | 14,779 |
+| Cache read tokens | 170,612 | 82,605 | 148,544 |
+| Output tokens | 1,935 | 1,326 | 3,069 |
+| Cost (USD) | 0.123 | 0.087 | 0.213 |
+| Peak RSS, server + browser (MB) | 683.2 | 818.2 | 788.9 |
+|   of which MCP server (MB) | 29.2 | 253.2 | 304.8 |
+|   of which browser (MB) | 655.5 | 639.5 | 615.6 |
+| First page loaded, from process start (s) | 4.3 | 5.2 | 4.7 |
+| Navigate call latency (s) | 0.1 | 0.9 | 1.1 |
+| JS-injection workarounds (total over 3 runs) | 0 | 0 | 0 |
+
+Per run (wall s / tool calls / cost USD):
+
+- bx: 39s / 12 / $0.127; 29s / 12 / $0.123; 28s / 12 / $0.114
+- playwright: 27s / 7 / $0.087; 27s / 7 / $0.087; 25s / 7 / $0.083
+- devtools: 34s / 32 / $0.213; 32s / 30 / $0.150; 31s / 24 / $0.229
+
+### wizard
+
+| Metric (median of 3) | bx | Playwright MCP | Chrome DevTools MCP |
+|---|---|---|---|
+| Success | 3/3 | 3/3 | 3/3 |
+| Wall time (s) | 61.1 | 105.5 | 111.6 |
+| Turns | 28 | 64 | 56 |
+| Tool calls | 27 | 63 | 55 |
+| Input tokens (uncached) | 52 | 92 | 66 |
+| Cache write tokens | 14,021 | 30,130 | 32,312 |
+| Cache read tokens | 518,709 | 1,137,831 | 988,454 |
+| Output tokens | 3,952 | 4,766 | 6,820 |
+| Cost (USD) | 0.291 | 0.563 | 0.593 |
+| Peak RSS, server + browser (MB) | 684.6 | 760 | 857.5 |
+|   of which MCP server (MB) | 29 | 251.4 | 289.7 |
+|   of which browser (MB) | 656.6 | 634.5 | 629 |
+| First page loaded, from process start (s) | 4.2 | 5.1 | 5.4 |
+| Navigate call latency (s) | 0.1 | 0.6 | 1.1 |
+| JS-injection workarounds (total over 3 runs) | 1 | 1 | 10 |
+
+Per run (wall s / tool calls / cost USD):
+
+- bx: 61s / 27 / $0.283; 69s / 26 / $0.291; 61s / 29 / $0.307
+- playwright: 87s / 63 / $0.481; 130s / 72 / $0.608; 105s / 60 / $0.563
+- devtools: 115s / 63 / $0.684; 102s / 55 / $0.593; 112s / 53 / $0.522
+
+
+## What happened in the runs
+
+- **wizard**: bx used `batch` to fill each step in one call (9 to 10 batches per run), so it needed 27 tool calls against 63 for Playwright and 55 for DevTools. That cut cache-read tokens by about half and cost by about half.
+- **grid**: bx lost. Its default typing pastes text, and this grid only listens for key presses. In all 3 bx runs the first batch typed nothing. The agent read the page's script, called `start` again with `typing: "keys"`, and redid the work. Playwright's agent wrote one `browser_run_code_unsafe` script that pressed every key, which made it the cheapest and fastest tool on this task. DevTools clicked and typed cell by cell (24 to 32 calls).
+- **Terms box**: every tool's agent fell back to JavaScript at least once to scroll the terms box (bx 1 run, Playwright 1 run, DevTools all 3). DevTools runs also used `evaluate_script` to dispatch synthetic mouse events on combobox options and to set the date input, 10 JS workarounds across 3 runs. No agent wrote the app's internal `state` directly.
+- **Tool-definition overhead** (from a one-turn "Reply with ok" run per tool, `runs/smoke-*`): context before any work was 10,109 tokens with Playwright (25 tools), 13,336 with bx (33 tools) and 15,141 with DevTools (33 tools). bx's tool descriptions are about 3.2k tokens heavier than Playwright's.
+
+## Setup comparison
+
+| | bx | Playwright MCP | Chrome DevTools MCP |
+|---|---|---|---|
+| Needs installed | the bx binary (Go, no runtime); a Chromium browser (Brave, Chrome, Chromium, Edge, Arc, Vivaldi); macOS only | Node.js + npx; Chrome or Edge, or a Playwright-downloaded browser | Node.js + npx; Chrome (stable/beta/dev/canary, or `--executablePath`) |
+| Install size | 12.8 MB binary built locally; npm package `@facets-cloud/bx-darwin-arm64` is 8.6 MB unpacked | 19 MB `node_modules` for `@playwright/mcp@0.0.85` | 17 MB `node_modules` for `chrome-devtools-mcp@1.13.0` |
+| Browser download | none, uses an installed browser | none here (used installed Chrome); without one you run `npx playwright install` for a bundled browser | none, needs installed Chrome |
+| Use the user's existing logged-in profile | yes: attaches to the running browser in the named profile after one Allow click per browser run (or `bx launch` for a separate agent browser with its own logins, which these runs used) | only with the "Playwright Extension" installed in Chrome/Edge (`--extension`), or `--cdp-endpoint` to a browser started with remote debugging; `--user-data-dir` gives it its own persistent profile, not your running one | `--autoConnect` to a running Chrome 144+ after turning on remote debugging at chrome://inspect/#remote-debugging, or `--browserUrl` to a Chrome started with a debugging port; default is its own profile under `~/.cache/chrome-devtools-mcp` |
+| Telemetry | none | none found in flags | usage statistics on by default (`--usageStatistics=false` or `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`); performance traces send URLs to CrUX unless `--performanceCrux=false`. Both were off for these runs |
+| Agent browser launch to first page | 0.41 s for `bx launch` + first command (median of 0.84, 0.41, 0.35 s), then 0.1 s per `open` | 0.6 to 0.9 s for the first `browser_navigate`, which launches Chrome | 1.1 s for the first `new_page`, which launches Chrome |
+| First page loaded, from `claude -p` start | 4.2 to 4.3 s (browser already running) | 5.1 to 5.2 s | 4.7 to 5.4 s |
+
+The "first page loaded" times include Claude Code's own startup and the model's first turn (about 3 to 4 s), so most of that number isn't the browser tool.
+
+## How the runs were made
+
+Per tool MCP config (`mcp/*.json`):
+
+```json
+{"mcpServers":{"bx":{"command":"~/dev/work/facets/bx-bench/bx","args":["mcp"],"env":{"BX_BROWSER":"brave-agent"}}}}
+{"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@0.0.85","--isolated"]}}}
+{"mcpServers":{"chrome-devtools":{"command":"npx","args":["-y","chrome-devtools-mcp@1.13.0","--isolated","--performanceCrux=false","--usageStatistics=false"],"env":{"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS":"1"}}}}
+```
+
+Each run (`scripts/run.py <tool> <task> <n>`) executes, from `~/dev/work/facets/bx-bench`:
+
+```sh
+claude -p "<prompt>" --output-format stream-json --verbose \
+  --mcp-config mcp/<tool>.json --strict-mcp-config --permission-mode bypassPermissions \
+  --tools "" --setting-sources "" --disable-slash-commands --no-session-persistence
+```
+
+`--tools ""` removes Bash, Read and the other built-ins so the agent can only use the browser tool. `--setting-sources ""` keeps the user's hooks, plugins and CLAUDE.md out of the runs. Before each bx run, `scripts/bx-reset.sh` clears the origin's localStorage and closes every tab but one blank one in bx's agent browser. Playwright and DevTools ran with `--isolated`, so each run got a fresh browser profile.
+
+The three tools ran at the same time in each round (one round per run number), so they shared the machine and the API under the same conditions. A sampler ran `ps` every second and summed RSS over the `claude` process's descendants (the MCP server, the npx wrapper and any browser it launched). For bx it also added the bx daemon and the agent browser's process tree, which live outside that tree. Token counts and cost come from the final `result` event.
+
+Prompts (`{RUN}` is the run id, `{PDF}` the absolute path of `fixtures/signed-agreement.pdf`):
+
+grid:
+
+```
+Use the browser tools to open http://localhost:8771/uc-grid/index.html?run={RUN} . It is a small spreadsheet. Enter this table starting at cell A1, one value per cell, and leave every other cell empty:
+
+Row 1: Item, Qty, Price
+Row 2: Apples, 12, 0.50
+Row 3: Pears, 7, 0.80
+Row 4: Total, 19, 9.60
+
+When you are done, reply with the values of A1 to C4 exactly as the page shows them.
+```
+
+wizard:
+
+```
+Use the browser tools to open http://localhost:8771/uc-wizard/index.html?run={RUN} . It is a 6-step vendor onboarding wizard. Onboard this vendor, submit it, then approve it.
+
+1. Company: legal name "Lumen Analytics Pvt Ltd", country India, company type Private limited, GSTIN 27ABCDE1234F1Z5.
+2. Contacts: Priya Nair, priya@lumen.example, role Billing; Rahul Shah, rahul@lumen.example, role Technical.
+3. Bank & documents: account holder "Lumen Analytics Pvt Ltd", account number IN12LUMN0000123456, SWIFT LUMNINBB. Upload the signed agreement {PDF} . Read the vendor terms to the end and accept them.
+4. Announcement: post "Welcome Lumen Analytics, our new analytics vendor."
+5. Approvals: approvers Asha Rao (Legal) and Ben Carter (Security), route Sequential, due date 2026-12-15.
+6. Review: submit for approval and confirm.
+
+Then open the Approvals inbox, review the request you just submitted and approve it with the comment "Documents verified and bank details checked." Reply with the request id and its final status.
+```
+
+Files: `runs/<task>-<tool>-<n>.jsonl` (stream-json, each line prefixed with seconds since start), `.rss.tsv` (1 s memory samples), `.meta.json`, `.err`; `runs/summary.json` (all per-run metrics); `runs/nav.json`; `states/` (page-posted end states); `scripts/` (runner, checker, tables); `pages/` (bench copies of the test pages). Rebuild the tables with `python3 scripts/summarize.py && python3 scripts/tables.py`. Cost: 21 `claude -p` runs (18 measured + 3 one-turn smoke runs), $5.59 in total.
+
+## What to put on the landing page
+
+Claims the numbers support, all on the multi-step wizard task with Claude Opus 5.5:
+
+1. "Finished a 6-step onboarding form in 61 s, against 106 s with Playwright MCP and 112 s with Chrome DevTools MCP." (median of 3, about 42% less time)
+2. "Half the cost per task: $0.29 against $0.56 (Playwright MCP) and $0.59 (Chrome DevTools MCP)."
+3. "27 tool calls instead of 55 to 63. bx fills a whole form step in one `batch` call."
+4. "The MCP server uses 29 MB of memory, against 251 MB for Playwright MCP and 290 MB for Chrome DevTools MCP." Only with the caveat below about npx.
+5. "No browser download and no extension: bx drives the Chromium browser you already have, in the profile you name."
+
+Claims that would NOT be fair:
+
+- "bx is faster and cheaper" with no task named. On the keyboard-only grid, Playwright MCP was faster (27 s against 29 s) and 29% cheaper ($0.087 against $0.123), because bx pastes text by default and the agent had to switch to key-by-key typing in every run.
+- "bx uses less memory" for the whole setup. The browser dominates: 656 MB for bx's Brave against 629 to 635 MB for Chrome on the wizard, and bx's agent browser stays running between tasks while the others close theirs. Total peak RSS was lower for bx in these runs (685 MB against 760 and 858 MB on the wizard), but the gap is the server, not the browser.
+- The 29 MB server figure if users install bx through npx. These runs started the binary directly. Started as `npx -y @facets-cloud/bx mcp`, the npm and node wrapper processes add roughly 66 MB (measured on the same machine), so about 95 MB. Playwright and DevTools were measured through npx, wrapper included.
+- "More reliable." All three tools passed 6 of 6 runs.
+- "Smaller context." bx's tool definitions cost about 3.2k more tokens than Playwright MCP's (13.3k against 10.1k before any work). bx used fewer tokens per task only because it needed fewer calls.
+- Cold-start claims. In the runs bx's browser was already running, and the other two launched Chrome inside the first navigate call. Measured separately, launch to first page was 0.4 s for bx and 0.6 to 1.1 s for the others, less than the run-to-run noise of a 60 to 110 s task.
+- Anything beyond this setup. These are 3 runs per cell, one machine, one model, two local test pages written for the bx demo. They aren't independent benchmark pages.

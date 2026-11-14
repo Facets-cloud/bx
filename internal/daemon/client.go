@@ -29,6 +29,10 @@ import (
 type Request struct {
 	Op   string            `json:"op"`
 	Args map[string]string `json:"args,omitempty"`
+
+	// names maps the tab's refs to role and name as they were when the
+	// request arrived, for the log; the daemon fills it in.
+	names map[string]string
 }
 
 // Response is the daemon's answer. Code is an exit code when Error is set.

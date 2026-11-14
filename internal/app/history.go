@@ -170,23 +170,25 @@ func sessionTree(info daemon.SessionInfo, es []daemon.Entry, cur string, limit i
 		b.WriteString("resume: " + r + "\n")
 	}
 	b.WriteString("log: " + info.Log + "\n")
-	tasks := splitTasks(es)
+	tasks, first := splitTasks(es), 0
 	if limit > 0 && len(tasks) > limit {
 		fmt.Fprintf(&b, "(%d earlier tasks left out)\n", len(tasks)-limit)
-		tasks = tasks[len(tasks)-limit:]
+		first = len(tasks) - limit
 	}
 	root := &node{}
-	for _, t := range tasks {
-		addTask(root, t)
+	for i := first; i < len(tasks); i++ {
+		addTask(root, tasks[i], i+1)
 	}
 	root.render(&b, "")
 	return b.String()
 }
 
-func addTask(root *node, t *task) {
-	head := "(untitled)"
+// addTask adds task number n (as bx history pin --task takes it) with its
+// pages and actions.
+func addTask(root *node, t *task, n int) {
+	head := fmt.Sprintf("%d (untitled)", n)
 	if t.title != "" {
-		head = fmt.Sprintf("%q", t.title)
+		head = fmt.Sprintf("%d %q", n, t.title)
 	}
 	head += "  " + span(t.start, t.end) + "  " + counts(len(t.entries), t.failed)
 	if t.summary != "" {
@@ -196,15 +198,21 @@ func addTask(root *node, t *task) {
 	var page *node
 	var at string
 	for _, e := range t.entries {
-		where := strings.TrimSpace(e.Profile + "  " + daemon.ShortURL(e.URL))
-		if where == "" {
-			where = "browser"
-		}
-		if page == nil || where != at {
-			page, at = tn.add(where), where
+		// Pages are grouped by URL: the profile's name can read differently
+		// in a browser that has only just started.
+		if url := daemon.ShortURL(e.URL); page == nil || url != at {
+			page, at = tn.add(pageLabel(e)), url
 		}
 		page.add(actionLine(e))
 	}
+}
+
+// pageLabel names the page an entry acted on: profile and URL.
+func pageLabel(e daemon.Entry) string {
+	if where := strings.TrimSpace(e.Profile + "  " + daemon.ShortURL(e.URL)); where != "" {
+		return where
+	}
+	return "browser"
 }
 
 func actionLine(e daemon.Entry) string {
@@ -233,8 +241,19 @@ func resumeCommand(s daemon.SessionInfo) string {
 	return ""
 }
 
-// cmdHistory is bx history [<session>|current|previous] [--limit n].
+// cmdHistory is bx history [<session>|current|previous] [--limit n], and
+// its pin, pinned and unpin subcommands.
 func cmdHistory(e env) error {
+	if len(e.pos) > 0 {
+		switch e.pos[0] {
+		case "pin":
+			return cmdPin(e)
+		case "pinned":
+			return cmdPinned(e)
+		case "unpin":
+			return cmdUnpin(e)
+		}
+	}
 	ref := strings.Join(e.pos, " ")
 	if e.o.json {
 		list, err := daemon.ListSessions()

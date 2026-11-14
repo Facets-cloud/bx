@@ -304,6 +304,17 @@ func readTools() []mcpTool {
 				}
 				return mcpContent{text: daemon.FormatSettings(daemon.LoadConfig().Settings())}, nil
 			}},
+		{Name: "pins", Description: "Pinned tasks: tasks saved from bx's history so you can do them again. " +
+			"action list (default) shows them; show with name gives a pin's steps, page by page, to follow again " +
+			"(ask the user for values: they were never logged); pin saves a task from a session under a name " +
+			"(session: current, previous or an id from history; task: its number in history's tree, default the last titled task); " +
+			"unpin deletes a pin. Pin when the user asks to save or repeat a task later.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
+				"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "pin", "unpin"}},
+				"name":    str("The pin's name, such as Onboard vendor."),
+				"session": str("For pin: current, previous or a session id."),
+				"task":    map[string]any{"type": "integer", "description": "For pin: the task's number in history's tree."}}},
+			run: func(args map[string]any) (mcpContent, error) { return pinsTool(args) }},
 		opTool("list_tabs", "List open tabs, optionally only those of one profile.", "tabs",
 			map[string]any{"profile": str("Profile name or folder, exact.")}, nil, map[string]string{"profile": "profile"}),
 		opTool("open", "Open a URL in a new tab of the named profile; returns the tab.", "open",

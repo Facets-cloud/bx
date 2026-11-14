@@ -189,6 +189,12 @@
   .browsers { margin-top: 12px; display: grid; gap: 6px; font-size: 14px; }
   .browsers div { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
   .browsers code { background: none; padding: 0; color: var(--muted); }
+  .cmpt { margin-top: 40px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
+  .cmpt table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 15px; }
+  .cmpt th { text-align: left; font: 500 12px "JetBrains Mono", monospace; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; padding: 0 12px 10px 0; }
+  .cmpt td { padding: 11px 12px 11px 0; border-top: 1px solid var(--line); color: var(--muted); vertical-align: top; }
+  .cmpt td:first-child { color: var(--fg); }
+  .cmpt td.us { color: var(--fg); font-weight: 600; }
   .tree { margin-top: 40px; background: var(--term); color: var(--termfg); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
   .tree pre { margin: 0; font: 13.5px/1.65 "JetBrains Mono", monospace; white-space: pre; }
   .tree .c { color: #8a8a82; }
@@ -252,7 +258,7 @@
 <nav>
   <div class="wrap">
     <a class="mark" href="#"><b>b</b>x</a>
-    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
+    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#compare">Compared</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
   </div>
 </nav>
 
@@ -403,6 +409,21 @@ docker exec -it api sh</pre>
     </div>
   </section>
 
+  <section id="compare">
+    <div class="kicker">// compared</div>
+    <h2>Half the calls on a real form.</h2>
+    <p class="sub">The same agent (Claude Opus 5.5) did the same 6-step vendor onboarding, from company details through a shadow-DOM bank form, a PDF upload and an approval, three times with each tool. Every run finished the task. Medians:</p>
+    <div class="cmpt"><table>
+      <tr><th></th><th>bx</th><th>Playwright MCP</th><th>Chrome DevTools MCP</th></tr>
+      <tr><td>Time</td><td class="us">61 s</td><td>106 s</td><td>112 s</td></tr>
+      <tr><td>Tool calls</td><td class="us">27</td><td>63</td><td>55</td></tr>
+      <tr><td>Model cost</td><td class="us">$0.29</td><td>$0.56</td><td>$0.59</td></tr>
+      <tr><td>MCP server memory</td><td class="us">29 MB (about 95 MB started through npx)</td><td>251 MB</td><td>290 MB</td></tr>
+      <tr><td>Your logged-in browser</td><td class="us">Yes: the profile you name, one Allow click</td><td>Through a browser extension, or a browser started with a debugging port</td><td>Through remote debugging on Chrome 144+</td></tr>
+    </table></div>
+    <div class="callout"><b>Where bx lost:</b> on a spreadsheet that only takes key presses, Playwright MCP was a little faster (27 s against 29 s) and cheaper ($0.09 against $0.12). bx pastes text by default, and the agent had to switch to key-by-key typing. The win on the form comes from <code>batch</code>: one call fills a whole step. Three runs per tool on one Mac, with local test pages; the full numbers, prompts and method are in <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
+  </section>
+
   <section id="history">
     <div class="kicker">// history</div>
     <h2>Ask what it did. Get the whole session.</h2>
@@ -423,8 +444,9 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
         <table>
           <tr><th colspan="2">What's logged</th></tr>
           <tr><td>Logged</td><td>Time, browser, profile, the page it acted on and where it led, the action and its target, the result and how long it took.</td></tr>
-          <tr><td>Left out</td><td>What was typed, and what links carry. A fill shows the field, never the value; typed text and scripts show only their length. URLs are logged without the part after <code>?</code> or <code>#</code>, where sign-in codes and reset tokens travel. <code>bx config set log.values full</code> logs values for debugging, <code>off</code> logs nothing. Only you can change this, never the agent.</td></tr>
+          <tr><td>Left out</td><td>What was typed, and what links carry. A fill shows the field, never the value; typed text and scripts show only their length. URLs are logged without the part after <code>?</code>, where sign-in codes and reset tokens travel, and without a <code>#</code> part holding tokens such as <code>#access_token=</code>. <code>bx config set log.values full</code> logs values for debugging, <code>off</code> logs nothing. Only you can change this, never the agent.</td></tr>
           <tr><td>Where</td><td>Only on your Mac, readable only by you. Nothing is sent anywhere.</td></tr>
+          <tr><td>Pin it</td><td>"Pin that as Onboard vendor" saves the task. Later, "do the Onboard vendor pin for Lumen" and the agent follows its steps page by page, asking you only for the values. Elements are logged by name, <code>button "Next"</code>, so the steps still make sense next month. Pins are never deleted.</td></tr>
         </table>
       </div>
       <div class="vars">
@@ -453,12 +475,12 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   </section>
 
   <section id="tools">
-    <div class="kicker">// 33 tools</div>
+    <div class="kicker">// 34 tools</div>
     <h2>Everything you'd do by hand, plus DevTools.</h2>
     <p class="sub">The agent snapshots a tab and gets a ref like <code>e12</code> for each element, or names one the way the snapshot shows it: <code>button "Next"</code>. Actions report what changed on the page, and <code>batch</code> runs a whole plan in one call, across screens it hasn't seen yet.</p>
     <div class="tools-grid">
       <div class="group"><h3>Setup <span>5</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li><li>settings</li></ul></div>
-      <div class="group"><h3>Read <span>8</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li><li>history</li></ul></div>
+      <div class="group"><h3>Read <span>9</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li><li>history</li><li>pins</li></ul></div>
       <div class="group"><h3>Act <span>14</span></h3><ul><li>open</li><li>goto</li><li>click</li><li>hover</li><li>drag</li><li>fill</li><li>type</li><li>key</li><li>upload</li><li>dialog</li><li>close_tab</li><li>batch</li><li>start</li><li>done</li></ul></div>
       <div class="group dbg"><h3>Debug <span>6</span></h3><ul><li>console</li><li>network</li><li>storage</li><li>performance</li><li>emulate</li><li>cdp</li></ul></div>
     </div>
