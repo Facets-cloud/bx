@@ -189,6 +189,17 @@
   .browsers { margin-top: 12px; display: grid; gap: 6px; font-size: 14px; }
   .browsers div { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
   .browsers code { background: none; padding: 0; color: var(--muted); }
+  .cmpt { margin-top: 40px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
+  .cmpt table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 15px; }
+  .cmpt th { text-align: left; font: 500 12px "JetBrains Mono", monospace; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; padding: 0 12px 10px 0; }
+  .cmpt td { padding: 11px 12px 11px 0; border-top: 1px solid var(--line); color: var(--muted); vertical-align: top; }
+  .cmpt td:first-child { color: var(--fg); }
+  .cmpt td.us { color: var(--fg); font-weight: 600; }
+  .tree { margin-top: 40px; background: var(--term); color: var(--termfg); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
+  .tree pre { margin: 0; font: 13.5px/1.65 "JetBrains Mono", monospace; white-space: pre; }
+  .tree .c { color: #8a8a82; }
+  .tree .bad { color: #ff7070; }
+  .tree .t { color: #7aa2ff; }
   .callout { margin-top: 16px; border: 1px dashed var(--line); border-radius: 14px; padding: 18px 22px; color: var(--muted); font-size: 15.5px; }
   .callout b { color: var(--fg); }
   .callout code { font-size: 13px; }
@@ -247,7 +258,7 @@
 <nav>
   <div class="wrap">
     <a class="mark" href="#"><b>b</b>x</a>
-    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
+    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#compare">Compared</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a></div>
   </div>
 </nav>
 
@@ -398,11 +409,62 @@ docker exec -it api sh</pre>
     </div>
   </section>
 
+  <section id="compare">
+    <div class="kicker">// compared</div>
+    <h2>Fewer calls on multi-step forms.</h2>
+    <p class="sub">On a 6-step vendor onboarding form (a shadow-DOM bank form, a PDF upload, an approval), the same agent needed a median of <b>24 tool calls with bx against 62 with Playwright MCP</b>: <code>batch</code> fills a whole step in one call. All runs of both finished the task.</p>
+    <div class="cmpt"><table>
+      <tr><th></th><th>bx</th><th>Playwright MCP</th><th>Chrome DevTools MCP</th></tr>
+      <tr><td>MCP server memory</td><td class="us">29 MB (about 95 MB started through npx)</td><td>251 MB</td><td>290 MB</td></tr>
+      <tr><td>Your logged-in browser</td><td class="us">Yes: the profile you name, one Allow click</td><td>Through a browser extension, or a browser started with a debugging port</td><td>Through remote debugging on Chrome 144+</td></tr>
+      <tr><td>Browser download</td><td class="us">None: uses the Chromium browser you have</td><td>None if Chrome or Edge is installed</td><td>None, needs Chrome</td></tr>
+    </table></div>
+    <div class="callout"><b>A small benchmark, run by us.</b> We wrote the test pages and tuned bx after the first round, with three runs per tool on one Mac. On a keyboard-only spreadsheet the two came out even, and Playwright MCP has things bx doesn't, such as cross-browser and headless runs. Method, every run, where bx lost and the caveats: <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
+  </section>
+
+  <section id="history">
+    <div class="kicker">// history</div>
+    <h2>Ask what it did. Get the whole session.</h2>
+    <p class="sub">bx logs every action on your machine, one file per agent session. Inside Claude Code or Codex that's the app's own conversation, so you can jump back to it. Ask your agent "what did bx do in my last session?" and it calls <code>history</code>, which draws the session from start to end: each task, the pages it worked on, and every action with its result.</p>
+    <div class="tree"><pre><span class="c">bx-4c1e9a07d2f3  claude-code  bx  Nov 14 13:00:29-13:01:02  "Read example.com"  4 actions, 2 failed
+resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
+├─ <span class="t">"Read example.com"</span>  13:00:29-13:00:32  3 actions, 1 failed  done: "Followed the link"
+│  ├─ Personal  example.com/
+│  │  ├─ 13:00:29  open https://example.com  ok 413ms
+│  │  └─ 13:00:29  click a  ok 364ms  -> iana.org/help/example-domains
+│  └─ Personal  iana.org/help/example-domains
+│     └─ 13:00:30  fill #nope  <span class="bad">FAILED: no visible element matches "#nope"</span>
+└─ <span class="t">(untitled)</span>  13:00:32-13:01:02  1 action
+   └─ Personal  iana.org/help/example-domains
+      └─ 13:00:32  goto back  ok 236ms  -> example.com/</pre></div>
+    <div class="settings">
+      <div class="vars">
+        <table>
+          <tr><th colspan="2">What's logged</th></tr>
+          <tr><td>Logged</td><td>Time, browser, profile, the page it acted on and where it led, the action and its target, the result and how long it took.</td></tr>
+          <tr><td>Left out</td><td>What was typed, and what links carry. A fill shows the field, never the value; typed text and scripts show only their length. URLs are logged without the part after <code>?</code>, where sign-in codes and reset tokens travel, and without a <code>#</code> part holding tokens such as <code>#access_token=</code>. <code>bx config set log.values full</code> logs values for debugging, <code>off</code> logs nothing. Only you can change this, never the agent.</td></tr>
+          <tr><td>Where</td><td>Only on your Mac, readable only by you. Nothing is sent anywhere.</td></tr>
+          <tr><td>Pin it</td><td>"Pin that as Onboard vendor" saves the task. Later, "do the Onboard vendor pin for Lumen" and the agent follows its steps page by page, asking you only for the values. Elements are logged by name, <code>button "Next"</code>, so the steps still make sense next month. Pins are never deleted.</td></tr>
+        </table>
+      </div>
+      <div class="vars">
+        <table>
+          <tr><th colspan="2">How long it's kept</th></tr>
+          <tr><td>Why size, not age</td><td>One action is about 285 bytes. An agent doing 2,000 actions a day writes about 210 MB a year, so 2 GB lasts around ten years. An age limit would only throw history away, so logs are kept until they get big, not until they get old.</td></tr>
+          <tr><td>Recent</td><td>Plain files, up to 2 GB in total, about 7.5 million actions.</td></tr>
+          <tr><td>Older</td><td>Past 2 GB, the oldest sessions are gzipped, about ten times smaller, up to 5 GB. <code>history</code> reads them as they are.</td></tr>
+          <tr><td>Expiry</td><td>Past the 5 GB, the oldest archived sessions are deleted. That only stops a runaway agent from filling the disk.</td></tr>
+          <tr><td>Change it</td><td><code>bx config set log.days 90</code> makes history expire; <code>log.max</code> and <code>log.archive_max</code> take sizes. Agents can raise these, only you can lower them.</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="setup">
     <div class="kicker">// setup</div>
     <h2>Three steps, once per browser.</h2>
     <div class="steps">
-      <div class="step"><h3>Add the MCP server</h3><p>Claude Code: the command at the top. Codex: <code>codex mcp add bx -- npx -y @facets-cloud/bx mcp</code>. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>.</p></div>
+      <div class="step"><h3>Install the plugin</h3><p>Claude Code and Codex: the command at the top. It brings the MCP server and the skill, and updates with the plugin manager. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>. Any other MCP app: <code>npx -y @facets-cloud/bx mcp</code>.</p></div>
       <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open this page in your browser and switch it on.</p>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
@@ -411,12 +473,12 @@ docker exec -it api sh</pre>
   </section>
 
   <section id="tools">
-    <div class="kicker">// 31 tools</div>
+    <div class="kicker">// 34 tools</div>
     <h2>Everything you'd do by hand, plus DevTools.</h2>
     <p class="sub">The agent snapshots a tab and gets a ref like <code>e12</code> for each element, or names one the way the snapshot shows it: <code>button "Next"</code>. Actions report what changed on the page, and <code>batch</code> runs a whole plan in one call, across screens it hasn't seen yet.</p>
     <div class="tools-grid">
-      <div class="group"><h3>Setup <span>4</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li></ul></div>
-      <div class="group"><h3>Read <span>7</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li></ul></div>
+      <div class="group"><h3>Setup <span>5</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li><li>settings</li></ul></div>
+      <div class="group"><h3>Read <span>9</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li><li>history</li><li>pins</li></ul></div>
       <div class="group"><h3>Act <span>14</span></h3><ul><li>open</li><li>goto</li><li>click</li><li>hover</li><li>drag</li><li>fill</li><li>type</li><li>key</li><li>upload</li><li>dialog</li><li>close_tab</li><li>batch</li><li>start</li><li>done</li></ul></div>
       <div class="group dbg"><h3>Debug <span>6</span></h3><ul><li>console</li><li>network</li><li>storage</li><li>performance</li><li>emulate</li><li>cdp</li></ul></div>
     </div>
@@ -448,23 +510,22 @@ docker exec -it api sh</pre>
   // Install tabs: a command per client, or a prompt any agent can follow
   const PROMPT = `Install bx (browser exec, npm package @facets-cloud/bx) for me. It's an MCP server that lets you drive my running Chromium browser in a profile I name.
 
-1. Add it as an MCP server for the app you're running in:
-   - Claude Code: claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp
-   - Codex: codex mcp add bx -- npx -y @facets-cloud/bx mcp
-   - Claude Desktop or Cursor: npx -y @facets-cloud/bx mcp install
+1. Install it for the app you're running in:
+   - Claude Code, as a plugin (MCP server and skill): claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
+   - Codex, as a plugin: codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
+   - Claude Desktop or Cursor, as an MCP server: npx -y @facets-cloud/bx mcp install
 2. Ask which browser I use, and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
 3. If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
-4. Ask whether I want bx at human pace. Fast mode is the default: a "bx" pointer shows each action, with no pacing. Watch mode slows it to human pace; for it, add BX_MODE=watch to the server's env in step 1. If a site ignores pasted text, BX_TYPING=keys makes bx type key by key.
+4. Ask whether I want bx at human pace. Fast mode is the default: a "bx" pointer shows each action, with no pacing. Watch mode slows it to human pace; for it, set BX_MODE=watch in the environment the app starts with (for Claude Code or Codex, export it in my shell profile). If a site ignores pasted text, BX_TYPING=keys makes bx type key by key.
 5. Tell me to restart this app, then run the bx doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
   const TABS = [
-    ["Claude Code", "claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp", "Then turn on remote debugging and click Allow once."],
-    ["Codex", "codex mcp add bx -- npx -y @facets-cloud/bx mcp", "Then turn on remote debugging and click Allow once."],
+    ["Claude Code", "claude plugin marketplace add Facets-cloud/bx\nclaude plugin install bx@bx", "The plugin brings the MCP server and the skill, and keeps them updated. Restart Claude Code, turn on remote debugging, click Allow once."],
+    ["Codex", "codex plugin marketplace add Facets-cloud/bx\ncodex plugin add bx@bx", "The plugin brings the MCP server and the skill. Start a new Codex session, turn on remote debugging, click Allow once."],
     ["Cursor / Desktop", "npx -y @facets-cloud/bx mcp install", "Adds bx to Claude Desktop and Cursor if they're installed."],
     ["Ask your agent", PROMPT, "Paste this into any agent. It installs bx and walks you through the rest."],
   ];
   const MODE_TABS = [
-    ["Claude Code", "claude mcp remove bx -s user\nclaude mcp add -s user bx -e BX_MODE=watch -- npx -y @facets-cloud/bx mcp", "Swap or add -e BX_TYPING=keys. Restart Claude Code after."],
-    ["Codex", '[mcp_servers.bx]\ncommand = "npx"\nargs = ["-y", "@facets-cloud/bx", "mcp"]\nenv = { BX_MODE = "watch" }', "In ~/.codex/config.toml. Restart Codex after."],
+    ["Claude Code / Codex", "export BX_MODE=watch     # in your shell profile\nexport BX_TYPING=keys    # optional", "The plugin's MCP server reads the environment the app starts with. Restart Claude Code or Codex after."],
     ["Cursor / Desktop", '{ "mcpServers": { "bx": {\n  "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"],\n  "env": { "BX_MODE": "watch" } } } }', "The bx entry in ~/.cursor/mcp.json or claude_desktop_config.json."],
     ["CLI", "export BX_MODE=watch        # in your shell profile\nBX_MODE=watch bx batch $id --file steps.json   # or for one command", "The CLI and the agent skill read your shell's environment."],
   ];

@@ -6,6 +6,9 @@ package daemon
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +29,10 @@ import (
 type Request struct {
 	Op   string            `json:"op"`
 	Args map[string]string `json:"args,omitempty"`
+
+	// names maps the tab's refs to role and name as they were when the
+	// request arrived, for the log; the daemon fills it in.
+	names map[string]string
 }
 
 // Response is the daemon's answer. Code is an exit code when Error is set.
@@ -71,6 +78,12 @@ func Call(browser string, req Request, out any, start bool) error {
 	}
 	if req.Args["session"] == "" {
 		req.Args["session"] = sessionID()
+	}
+	if req.Args["harness"] == "" {
+		req.Args["harness"], req.Args["harness_session"] = harnessSession()
+	}
+	if req.Args["project"] == "" {
+		req.Args["project"] = projectDir()
 	}
 	if os.Getenv("BX_TYPING") == "keys" {
 		// Type key by key instead of pasting text in one go.
@@ -232,9 +245,59 @@ func errorResponse(err error) Response {
 }
 
 // SessionID names the agent session this process's requests belong to.
-// The MCP server sets one per connection; the CLI uses $BX_SESSION, or
-// one shared session when it is unset.
+// The MCP server sets one per connection; the CLI uses $BX_SESSION, else
+// the agent app's session, else one shared session per day.
 var SessionID string
+
+// Harness names the agent app driving bx, when the MCP client said which
+// in its initialize request.
+var Harness string
+
+// harnessSession is the agent app running bx and its own session id, from
+// the variables Claude Code and Codex set for the tools and MCP servers
+// they start. Both are empty outside an agent app.
+func harnessSession() (name, id string) {
+	name = Harness
+	switch {
+	case os.Getenv("CLAUDE_CODE_SESSION_ID") != "":
+		id = os.Getenv("CLAUDE_CODE_SESSION_ID")
+		if name == "" {
+			name = "claude-code"
+		}
+	case os.Getenv("CODEX_THREAD_ID") != "":
+		id = os.Getenv("CODEX_THREAD_ID")
+		if name == "" {
+			name = "codex"
+		}
+	}
+	return name, id
+}
+
+// projectDir is the folder the agent works in.
+func projectDir() string {
+	if d := os.Getenv("CLAUDE_PROJECT_DIR"); d != "" {
+		return d
+	}
+	d, _ := os.Getwd()
+	return d
+}
+
+// CurrentSession is the session this process's requests belong to.
+func CurrentSession() string { return sessionID() }
+
+// NewSessionID names a new bx session. Inside an agent app that says
+// which session it is in, the id is derived from that one, so the MCP
+// server and every CLI command of one conversation share it; otherwise it
+// is random. Either way it starts with bx- and is unique.
+func NewSessionID() string {
+	if name, id := harnessSession(); id != "" {
+		sum := sha256.Sum256([]byte(name + "/" + id))
+		return "bx-" + hex.EncodeToString(sum[:6])
+	}
+	b := make([]byte, 3)
+	_, _ = rand.Read(b)
+	return "bx-" + time.Now().Format("20060102") + "-" + hex.EncodeToString(b)
+}
 
 func sessionID() string {
 	if SessionID != "" {
@@ -243,7 +306,10 @@ func sessionID() string {
 	if id := os.Getenv("BX_SESSION"); id != "" {
 		return id
 	}
-	return "cli"
+	if _, id := harnessSession(); id != "" {
+		return NewSessionID()
+	}
+	return "cli-" + time.Now().Format("2006-01-02")
 }
 
 // checkedVersion records the browsers whose running daemon this process

@@ -183,6 +183,22 @@ func (b Browser) profiles() ([]Profile, error) {
 	return parseProfiles(data)
 }
 
+// LastUsed is the folder of the profile the user last used, from Local
+// State, or "" when it can't be read.
+func (b Browser) LastUsed() string {
+	data, err := os.ReadFile(filepath.Join(b.Dir(), "Local State"))
+	if err != nil {
+		return ""
+	}
+	var ls struct {
+		Profile struct {
+			LastUsed string `json:"last_used"`
+		} `json:"profile"`
+	}
+	_ = json.Unmarshal(data, &ls)
+	return ls.Profile.LastUsed
+}
+
 func parseProfiles(data []byte) ([]Profile, error) {
 	var ls struct {
 		Profile struct {

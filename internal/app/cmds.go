@@ -41,6 +41,9 @@ func printTab(o out, t daemon.Tab) {
 		return
 	}
 	printTabs(o, []daemon.Tab{t})
+	for _, l := range t.Page { // open: the page's interactive elements
+		fmt.Fprintln(o.w, l)
+	}
 }
 
 func printTabs(o out, tabs []daemon.Tab) {
@@ -84,14 +87,11 @@ func cmdShowTab(e env) error {
 }
 
 func cmdOpen(e env) error {
-	if err := need(e.pos, 1, "bx open <url> --profile <name>"); err != nil {
+	if err := need(e.pos, 1, "bx open <url> [--profile <name>]"); err != nil {
 		return err
 	}
 	if err := browser.CheckURL(e.pos[0]); err != nil {
 		return err
-	}
-	if e.a.flags["profile"] == "" {
-		return exit.New(exit.Validation, "--profile is required (see bx list profiles)")
 	}
 	t, err := e.a.timeout()
 	if err != nil {

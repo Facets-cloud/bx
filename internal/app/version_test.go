@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/Facets-cloud/bx/internal/daemon"
 	"time"
 )
 
@@ -86,7 +89,7 @@ func TestCachedLatestUsesFreshCache(t *testing.T) {
 func TestChooseBrowserOrder(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("BX_BROWSER", "")
-	if err := saveConfig(config{Browser: "chrome"}); err != nil {
+	if err := daemon.SaveConfig(daemon.Config{Browser: "chrome"}); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := chooseBrowser(""); b.Name != "chrome" {
@@ -102,5 +105,21 @@ func TestChooseBrowserOrder(t *testing.T) {
 	t.Setenv("BX_BROWSER", "netscape")
 	if _, err := chooseBrowser(""); err == nil {
 		t.Error("an unknown browser must fail")
+	}
+}
+
+func TestSkillSkipsClaudeWithThePlugin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.MkdirAll(filepath.Join(home, ".claude", "plugins"), 0o755)
+	os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
+	if got := skillTargets(); len(got) != 2 {
+		t.Fatalf("without the plugin, want Claude and Codex, got %v", got)
+	}
+	os.WriteFile(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"),
+		[]byte(`{"version":2,"plugins":{"bx@bx":[{"scope":"user"}]}}`), 0o644)
+	got := skillTargets()
+	if len(got) != 1 || !strings.Contains(got[0], ".codex") {
+		t.Errorf("with the plugin, want only Codex, got %v", got)
 	}
 }

@@ -71,7 +71,6 @@ func TestValidationExitCodes(t *testing.T) {
 		{"close", "tab", "T1"},                         // no --yes
 		{"open", "--", "--renderer-cmd-prefix=x"},      // flag-like URL past the parser
 		{"open", "example.com", "--profile", "Facets"}, // no scheme
-		{"open", "https://example.com"},                // no --profile
 		{"click", "T1"},                                // missing selector
 		{"read", "T1", "--timeout", "never"},
 		{"cdp"},

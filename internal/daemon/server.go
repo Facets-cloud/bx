@@ -38,6 +38,8 @@ type server struct {
 	sessions  map[target.ID]*tabSession       // tabs the daemon stays attached to
 	rec       *recorder                       // the running recording, if any
 	tasks     map[string]*task                // agent sessions, by id
+	auditMu   sync.Mutex                      // one audit log write at a time
+	lastURL   map[string]string               // each tab's URL as of its last logged request
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -70,8 +72,9 @@ func Serve(browserName string) int {
 
 	s := &server{b: b, ctx: ctx, since: time.Now(), profileOf: map[cdp.BrowserContextID]string{},
 		sessions: map[target.ID]*tabSession{},
-		tasks:    map[string]*task{}, stop: make(chan struct{})}
+		tasks:    map[string]*task{}, lastURL: map[string]string{}, stop: make(chan struct{})}
 	s.forgetClosedTabs()
+	go s.tidyLogs()
 	reportStart(nil)
 	go s.accept(ln)
 
@@ -153,7 +156,13 @@ func (s *server) handle(conn net.Conn) {
 		return
 	}
 	resp := Response{}
+	began, title := time.Now(), s.taskTitle(req.Args["session"])
+	req.names = s.refNames(req.Args["tab"])
 	data, err := s.dispatch(req)
+	took := time.Since(began)
+	if title == "" {
+		title = s.taskTitle(req.Args["session"]) // set by this request (start)
+	}
 	if err == nil {
 		resp.Data, err = json.Marshal(data)
 	}
@@ -161,6 +170,8 @@ func (s *server) handle(conn net.Conn) {
 		resp = errorResponse(err)
 	}
 	_ = json.NewEncoder(conn).Encode(resp)
+	_ = conn.Close() // the client has its answer; the log write doesn't hold it up
+	s.audit(req, title, data, err, took)
 }
 
 func (s *server) dispatch(req Request) (any, error) {
@@ -188,6 +199,9 @@ func (s *server) dispatch(req Request) (any, error) {
 		}
 		if err == nil && a["follow"] == "true" {
 			_, _ = s.front(tab.ID)
+		}
+		if err == nil {
+			tab.Page = s.changes(tab.ID)
 		}
 		return tab, err
 	case "show":

@@ -25,6 +25,13 @@ func (sess *tabSession) takeSnapshot(ctx context.Context) (Snapshot, error) {
 	}
 	nodes, refs := buildSnapshot(tree.Nodes, prev)
 	sess.refs, sess.refLoader, sess.snap = refs, loader, nodes
+	named := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		if n.Ref != "" {
+			named[n.Ref] = roleName(n)
+		}
+	}
+	sess.named.Store(named)
 	url, title := sess.location(ctx)
 	return Snapshot{URL: url, Title: title, Nodes: nodes}, nil
 }
@@ -134,6 +141,15 @@ func look(n SnapNode) string {
 }
 
 // line renders one node the way Snapshot.Text does, without indent.
+// roleName is an element as role and name, the way an agent can name it
+// again on another day: button "Next".
+func roleName(n SnapNode) string {
+	if n.Name == "" {
+		return n.Role
+	}
+	return fmt.Sprintf("%s %q", n.Role, n.Name)
+}
+
 func line(n SnapNode) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", n.Ref, n.Role)

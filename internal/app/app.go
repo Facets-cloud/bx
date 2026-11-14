@@ -58,7 +58,8 @@ logged before that are included):
                                     each also takes off; lasts until bx stop
 
 Act (each waits for the page to settle and reports navigation, new tabs, dialogs):
-  bx open <url> --profile <name>
+  bx open <url> [--profile <name>]  default: the profile you last used; prints the
+                                    tab and the page's interactive elements
   bx goto <tab> <url|back|forward|reload>
   bx click <tab> <el> [--double]
   bx hover <tab> <el>
@@ -89,6 +90,17 @@ Session (one agent's task: the on-page pointer shows its title between calls):
                                     begin a task; $BX_SESSION names it (default: one CLI session)
   bx done ["<summary>"]             the agent finished its browser work: the on-page
                                     pointer shows Done and the summary, then goes away
+  bx history [<session>|current|previous] [--limit <n>]
+                                    what bx did: recent sessions, or one session
+                                    from start to end (tasks, pages, actions)
+  bx history pin <session> "<name>" [--task <n>]
+                                    save a task (default: the session's last titled one)
+                                    to do again later; pins are never deleted
+  bx history pinned [<name>]        list pins, or show one as steps to follow again
+  bx history unpin <name>
+  bx config                         the log settings: log.values, log.days, log.max,
+                                    log.archive_max, with their defaults
+  bx config set <key> <value>       change one, such as bx config set log.days 365
   bx status                         show the background connection, if any
   bx stop                           close it (the browser asks to Allow again next time);
                                     for an agent browser, also quits it
@@ -195,6 +207,9 @@ var commands = map[string]func(e env) error{
 	"front":         cmdFront,
 	"status":        cmdStatus,
 	"done":          cmdDone,
+	"history":       cmdHistory,
+	"config":        cmdConfig,
+	"config set":    cmdConfigSet,
 	"start":         cmdStart,
 	"record start":  cmdRecordStart,
 	"record stop":   cmdRecordStop,

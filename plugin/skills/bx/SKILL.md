@@ -37,7 +37,9 @@ action as something the user did with their own hands.
 ```
 bx list profiles
 bx list tabs [--profile <name>]
-bx open <url> --profile <name>            # prints the new tab's ID
+bx open <url> [--profile <name>]          # the new tab's ID and the page's interactive
+                                          # elements; profile defaults to the one last used.
+                                          # Name one when the task belongs to a particular account.
 bx show tab <id>
 bx snapshot <tab> [--out <file>]          # elements with refs: e12 button "Save"
           [--interactive] [--within <ref>]  # only controls and headings; one part of the page
@@ -148,6 +150,24 @@ then goes away. Don't run it between steps. Begin with
 `bx start "<task title>"`, so the pointer shows "Working on: <title>"
 between your calls. `done` lists the tabs the task opened; they stay
 open, so close the ones the user doesn't need.
+
+When the user asks what bx did ("what did you do in my last session?",
+"which pages did you open yesterday?"), read the log instead of guessing:
+`bx history` lists recent sessions, `bx history previous` (or `current`,
+or a session id) draws one session from start to end: its tasks, the
+pages each worked on and the actions on each, with results. Inside Claude
+Code or Codex a bx session is the app's own session. Over MCP it is the
+`history` tool. Typed values are not in the log. The log settings are
+`bx config` (MCP: `settings`); you may raise retention when the user asks,
+but lowering logging is the user's call: give them the command.
+
+Pins are tasks saved to repeat. When the user says "pin that as <name>",
+run `bx history pin current "<name>"` (MCP: `pins` with action pin). When
+they ask to do a pinned task again, read it with `bx history pinned
+"<name>"` (MCP: `pins` action show), ask them for every value the steps
+fill or choose (values are never logged), then go through its pages in
+order: snapshot each and run its steps, in one batch where you can. If a
+page changed, do what the step meant rather than failing.
 
 - Fast mode, the default: the pointer hops to each element and there is
   no pacing.

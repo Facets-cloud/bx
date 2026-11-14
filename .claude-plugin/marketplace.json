@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "bx",
+  "description": "bx: let coding agents drive your own running browser",
+  "owner": { "name": "Facets" },
+  "plugins": [
+    {
+      "name": "bx",
+      "description": "bx MCP server and skill: drive your Chromium browser in a named profile, with your logins",
+      "source": "./plugin",
+      "category": "productivity",
+      "homepage": "https://facets-cloud.github.io/bx/"
+    }
+  ]
+}
