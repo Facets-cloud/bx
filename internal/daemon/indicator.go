@@ -117,7 +117,7 @@ const pointerUIJS = `((last) => {
 	let [cx, cy] = last || [innerWidth / 2, innerHeight / 2];
 	let frame = 0;
 	// The tag keeps inside the page: near the right edge it slides left, under
-	// the pointer, and a long status is cut with an ellipsis to the page's width.
+	// the pointer, and a status wider than the page wraps.
 	let tagW = 0;
 	const place = () => {
 		const over = cx + 16 + tagW - (innerWidth - 8);
@@ -125,8 +125,13 @@ const pointerUIJS = `((last) => {
 	};
 	const measure = () => {
 		const shown = text.style.opacity === "1", room = Math.max(0, Math.min(360, innerWidth - 64));
+		text.style.whiteSpace = "nowrap";
+		const natural = text.scrollWidth, wrap = shown && natural > room;
 		if (shown) text.style.maxWidth = room + "px";
-		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(text.scrollWidth, room) : 0);
+		// A status too long for one line wraps, up to three lines.
+		Object.assign(text.style, wrap ? {whiteSpace: "normal", lineHeight: "1.3", maxHeight: "3.9em"} : {lineHeight: "", maxHeight: ""});
+		tag.style.alignItems = wrap ? "flex-start" : "center";
+		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(natural, room) : 0);
 		place();
 	};
 	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; place(); };
@@ -380,7 +385,7 @@ func (sess *tabSession) idle() {
 	// working on and wait longer before giving up on it.
 	msg, quiet := "Waiting for the agent", 20*time.Second
 	if title, _ := sess.title.Load().(string); title != "" {
-		msg, quiet = "Working on: "+clipText(title, 48), 2*time.Minute
+		msg, quiet = "Working on: "+clipText(title, 100), 2*time.Minute
 	}
 	m, _ := json.Marshal(msg)
 	ctx, cancel := context.WithTimeout(sess.ctx, 2*time.Second)
