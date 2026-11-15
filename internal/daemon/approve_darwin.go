@@ -21,8 +21,14 @@ var approve = func(task, what string) error {
 		"-e", "on run argv",
 		"-e", `display dialog (item 1 of argv) with title "bx" buttons {"Deny", "Allow"} default button "Deny" cancel button "Deny" with icon caution giving up after 60`,
 		"-e", "end run", msg).Output()
-	if err != nil || !strings.Contains(string(out), "button returned:Allow") || strings.Contains(string(out), "gave up:true") {
+	if !allowed(string(out), err) {
 		return exit.New(exit.Permission, "the user did not allow this: %s", what)
 	}
 	return nil
+}
+
+// allowed reads the dialog's answer: only a click on Allow counts. Deny
+// makes osascript fail ("User cancelled"), and a timeout reports gave up.
+func allowed(out string, err error) bool {
+	return err == nil && strings.Contains(out, "button returned:Allow") && !strings.Contains(out, "gave up:true")
 }
