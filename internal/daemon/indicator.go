@@ -85,7 +85,7 @@ const pointerUIJS = `((last) => {
 		border: "2px solid " + blue, zIndex: 2147483646, pointerEvents: "none", opacity: "0"});
 	// The pointer and its name tag move together as one layer, by transform.
 	const ptr = document.createElement("div");
-	Object.assign(ptr.style, {position: "fixed", left: "0", top: "0", zIndex: 2147483647, pointerEvents: "none", willChange: "transform", transition: "opacity .4s"});
+	Object.assign(ptr.style, {position: "fixed", left: "0", top: "0", zIndex: 2147483647, pointerEvents: "none", willChange: "transform", transformOrigin: "0 0", transition: "opacity .4s"});
 	// An arrow drawn in SVG (no innerHTML, so pages with Trusted Types
 	// accept it), tip at the top-left corner.
 	const ns = "http://www.w3.org/2000/svg";
@@ -116,27 +116,51 @@ const pointerUIJS = `((last) => {
 
 	let [cx, cy] = last || [innerWidth / 2, innerHeight / 2];
 	let frame = 0;
-	// The tag keeps inside the page: when it doesn't fit right of the pointer
-	// it flips to the left, its pointed corner toward the arrow, and a status
-	// wider than the page wraps.
-	let tagW = 0;
+	// The tag stays inside the page and off the arrow, like a tooltip: right
+	// of the arrow when it fits; else left of it; else on the roomier side,
+	// wrapped to that side's width; on a page too narrow for either side,
+	// below the arrow. Near the bottom of the page it goes above the arrow.
+	// Its pointed corner always faces the arrow.
+	// It measures against the part of the page on screen (the visual
+	// viewport), which on a page that isn't responsive can be smaller than
+	// the layout, zoomed or scrolled sideways.
+	let natural = 0;
+	// zoom undoes the page's zoom, so the pointer is the same size on screen
+	// on a page shown zoomed out (a desktop-only page on a phone) or in.
+	const zoom = () => 1 / (window.visualViewport?.scale || 1);
+	const seen = () => {
+		const v = window.visualViewport;
+		return v ? {l: v.offsetLeft, t: v.offsetTop, r: v.offsetLeft + v.width, b: v.offsetTop + v.height} : {l: 0, t: 0, r: innerWidth, b: innerHeight};
+	};
 	const place = () => {
-		const flip = cx + 16 + tagW > innerWidth - 8;
-		tag.style.left = (flip ? Math.max(-tagW - 2, 8 - cx) : 16) + "px";
-		tag.style.borderRadius = flip ? "10px 4px 10px 10px" : "4px 10px 10px 10px";
+		const B = seen(), k = zoom(), shown = text.style.opacity === "1", extra = badge.offsetWidth + 18 + (shown ? 6 : 0);
+		const need = Math.min(natural, 440) + extra, right = (B.r - cx) / k - 24, left = (cx - B.l) / k - 12;
+		let side = "right", w = need;
+		if (need > right) {
+			if (need <= left) side = "left";
+			else if (Math.max(right, left) >= 180) { side = right >= left ? "right" : "left"; w = Math.max(right, left); }
+			else { side = "below"; w = Math.min(need, (B.r - B.l) / k - 16); }
+		}
+		const wrap = shown && natural > w - extra;
+		if (shown) Object.assign(text.style, {maxWidth: Math.max(40, w - extra) + "px", whiteSpace: wrap ? "normal" : "nowrap",
+			lineHeight: wrap ? "1.3" : "", maxHeight: wrap ? "3.9em" : ""});
+		const tw = Math.min(need, w);
+		// A wrapped tag gets its width set: an absolutely placed box would
+		// otherwise shrink to the pointer layer, which is only the arrow wide.
+		Object.assign(tag.style, {alignItems: wrap ? "baseline" : "center", width: wrap ? tw + "px" : "max-content", boxSizing: "border-box"});
+		const th = tag.offsetHeight;
+		const x = side === "right" ? 16 : side === "left" ? -tw - 4 : (Math.min(Math.max(cx - 16 * k, B.l + 8 * k), B.r - (8 + tw) * k) - cx) / k;
+		const below = side === "below" ? 30 : 20, up = cy + (below + th + 8) * k > B.b;
+		const sharp = (on) => on && side !== "below" ? "4px" : "10px";
+		Object.assign(tag.style, {left: x + "px", top: (up ? -th - 8 : below) + "px", borderRadius: [
+			sharp(!up && side === "right"), sharp(!up && side === "left"), sharp(up && side === "left"), sharp(up && side === "right")].join(" ")});
 	};
 	const measure = () => {
-		const shown = text.style.opacity === "1", room = Math.max(0, Math.min(360, innerWidth - 64));
 		text.style.whiteSpace = "nowrap";
-		const natural = text.scrollWidth, wrap = shown && natural > room;
-		if (shown) text.style.maxWidth = room + "px";
-		// A status too long for one line wraps, up to three lines.
-		Object.assign(text.style, wrap ? {whiteSpace: "normal", lineHeight: "1.3", maxHeight: "3.9em"} : {lineHeight: "", maxHeight: ""});
-		tag.style.alignItems = wrap ? "baseline" : "center";
-		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(natural, room) : 0);
+		natural = text.style.opacity === "1" ? text.scrollWidth : 0;
 		place();
 	};
-	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; place(); };
+	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0) scale(" + zoom() + ")"; host.__pos = [x, y]; place(); };
 	// The element the pointer is on, and where on it. A pointer pinned to
 	// the screen drifts off its element as soon as the page scrolls.
 	let target = null, offX = 0, offY = 0;
@@ -148,6 +172,8 @@ const pointerUIJS = `((last) => {
 	};
 	addEventListener("scroll", () => requestAnimationFrame(follow), {capture: true, passive: true});
 	addEventListener("resize", () => requestAnimationFrame(() => { follow(); measure(); }), {passive: true});
+	window.visualViewport?.addEventListener("resize", () => requestAnimationFrame(() => put(cx, cy)), {passive: true});
+	window.visualViewport?.addEventListener("scroll", () => requestAnimationFrame(place), {passive: true});
 	new ResizeObserver(() => requestAnimationFrame(follow)).observe(document.documentElement);
 	const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 	const ui = {host, root, ripple,
