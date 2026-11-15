@@ -42,6 +42,12 @@ func (s *server) download(id, el, dir, name string, timeout time.Duration) (Down
 	if _, err := chromedp.CallBrowser(ctx, browser.SetDownloadBehavior, browser.SetDownloadBehaviorParams{
 		Behavior: browser.SetDownloadBehaviorBehaviorAllowAndName, BrowserContextID: info.BrowserContextID,
 		DownloadPath: dir, EventsEnabled: &on}); err != nil {
+		if strings.Contains(err.Error(), "browser context") {
+			// The browser takes this only for its default profile; other
+			// profiles are allowed downloads tab by tab.
+			cancel()
+			return s.downloadInTab(id, el, dir, name, timeout)
+		}
 		return Downloaded{}, upstream("allow downloads", err)
 	}
 	defer func() {
@@ -70,6 +76,100 @@ func (s *server) download(id, el, dir, name string, timeout time.Duration) (Down
 		out.Bytes = st.Size()
 	}
 	return out, nil
+}
+
+// downloadInTab is download for a tab of a profile other than the
+// browser's default one. The browser then can't name the file bx's way or
+// report on it, so the file lands in a folder of its own inside dir, and bx
+// watches that folder until the download is complete, then moves the file
+// into dir.
+func (s *server) downloadInTab(id, el, dir, name string, timeout time.Duration) (Downloaded, error) {
+	sess, err := s.session(id)
+	if err != nil {
+		return Downloaded{}, err
+	}
+	tmp, err := os.MkdirTemp(dir, ".bx-download-")
+	if err != nil {
+		return Downloaded{}, exit.New(exit.User, "cannot use folder %s: %v", dir, err)
+	}
+	defer os.RemoveAll(tmp)
+	ctx, cancel := context.WithTimeout(sess.ctx, timeout)
+	defer cancel()
+	if err := setTabDownloads(ctx, sess, "allow", tmp); err != nil {
+		return Downloaded{}, upstream("allow downloads", err)
+	}
+	defer func() {
+		rctx, rcancel := context.WithTimeout(s.ctx, 5*time.Second)
+		defer rcancel()
+		_ = setTabDownloads(rctx, sess, "default", "")
+	}()
+	res, err := s.click(id, el, false, timeout)
+	out := Downloaded{ActResult: res}
+	if err != nil {
+		return out, err
+	}
+	saved, err := s.awaitFile(ctx, id, el, tmp, min(beginWait, timeout))
+	if err != nil {
+		return out, err
+	}
+	if name == "" {
+		name = filepath.Base(saved)
+	}
+	out.File = freeName(dir, name)
+	if err := os.Rename(saved, out.File); err != nil {
+		return out, exit.New(exit.User, "saved the download but could not name it %s: %v", out.File, err)
+	}
+	if st, err := os.Stat(out.File); err == nil {
+		out.Bytes = st.Size()
+	}
+	return out, nil
+}
+
+func setTabDownloads(ctx context.Context, sess *tabSession, behavior, dir string) error {
+	p := map[string]string{"behavior": behavior}
+	if dir != "" {
+		p["downloadPath"] = dir
+	}
+	raw, _ := json.Marshal(p)
+	return sess.t.Call(ctx, "Page.setDownloadBehavior", json.RawMessage(raw), nil)
+}
+
+// awaitFile waits for a download to appear in tmp and finish: a file is
+// there and no partial (.crdownload) one is left. As with awaitDownload,
+// when nothing starts within begin it reports what the page shows instead.
+func (s *server) awaitFile(ctx context.Context, id, el, tmp string, begin time.Duration) (string, error) {
+	started := time.Now()
+	for {
+		file, partial := folderState(tmp)
+		switch {
+		case file != "" && !partial:
+			return file, nil
+		case file == "" && !partial && time.Since(started) > begin:
+			return "", s.noDownload(id, el)
+		}
+		select {
+		case <-ctx.Done():
+			if file == "" && !partial {
+				return "", s.noDownload(id, el)
+			}
+			return "", exit.New(exit.User, "the download that clicking %s started did not finish in time", el)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// folderState is the finished file in dir, if any, and whether a partial
+// download is still there.
+func folderState(dir string) (file string, partial bool) {
+	es, _ := os.ReadDir(dir)
+	for _, e := range es {
+		if strings.HasSuffix(e.Name(), ".crdownload") {
+			partial = true
+		} else if !e.IsDir() {
+			file = filepath.Join(dir, e.Name())
+		}
+	}
+	return file, partial
 }
 
 // downloadDir is the folder downloads go to, ~/Downloads unless given,

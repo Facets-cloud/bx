@@ -38,3 +38,23 @@ func TestDownloadDir(t *testing.T) {
 		t.Errorf("folder not created: %v", err)
 	}
 }
+
+func TestFolderState(t *testing.T) {
+	dir := t.TempDir()
+	if f, p := folderState(dir); f != "" || p {
+		t.Fatalf("empty folder: %q %v", f, p)
+	}
+	part := filepath.Join(dir, "Unconfirmed 1.crdownload")
+	if err := os.WriteFile(part, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if f, p := folderState(dir); f != "" || !p {
+		t.Errorf("partial only: %q %v", f, p)
+	}
+	if err := os.Rename(part, filepath.Join(dir, "receipt.pdf")); err != nil {
+		t.Fatal(err)
+	}
+	if f, p := folderState(dir); f != filepath.Join(dir, "receipt.pdf") || p {
+		t.Errorf("finished: %q %v", f, p)
+	}
+}
