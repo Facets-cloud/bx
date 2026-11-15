@@ -116,7 +116,27 @@ const pointerUIJS = `((last) => {
 
 	let [cx, cy] = last || [innerWidth / 2, innerHeight / 2];
 	let frame = 0;
-	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; };
+	// The tag keeps inside the page: when it doesn't fit right of the pointer
+	// it flips to the left, its pointed corner toward the arrow, and a status
+	// wider than the page wraps.
+	let tagW = 0;
+	const place = () => {
+		const flip = cx + 16 + tagW > innerWidth - 8;
+		tag.style.left = (flip ? Math.max(-tagW - 2, 8 - cx) : 16) + "px";
+		tag.style.borderRadius = flip ? "10px 4px 10px 10px" : "4px 10px 10px 10px";
+	};
+	const measure = () => {
+		const shown = text.style.opacity === "1", room = Math.max(0, Math.min(360, innerWidth - 64));
+		text.style.whiteSpace = "nowrap";
+		const natural = text.scrollWidth, wrap = shown && natural > room;
+		if (shown) text.style.maxWidth = room + "px";
+		// A status too long for one line wraps, up to three lines.
+		Object.assign(text.style, wrap ? {whiteSpace: "normal", lineHeight: "1.3", maxHeight: "3.9em"} : {lineHeight: "", maxHeight: ""});
+		tag.style.alignItems = wrap ? "baseline" : "center";
+		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(natural, room) : 0);
+		place();
+	};
+	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; place(); };
 	// The element the pointer is on, and where on it. A pointer pinned to
 	// the screen drifts off its element as soon as the page scrolls.
 	let target = null, offX = 0, offY = 0;
@@ -127,7 +147,7 @@ const pointerUIJS = `((last) => {
 		put(r.x + offX, r.y + offY);
 	};
 	addEventListener("scroll", () => requestAnimationFrame(follow), {capture: true, passive: true});
-	addEventListener("resize", () => requestAnimationFrame(follow), {passive: true});
+	addEventListener("resize", () => requestAnimationFrame(() => { follow(); measure(); }), {passive: true});
 	new ResizeObserver(() => requestAnimationFrame(follow)).observe(document.documentElement);
 	const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 	const ui = {host, root, ripple,
@@ -180,6 +200,7 @@ const pointerUIJS = `((last) => {
 			Object.assign(ptr.style, {opacity: "1"});
 			text.textContent = msg;
 			Object.assign(text.style, {maxWidth: "360px", marginLeft: "6px", opacity: "1"});
+			measure();
 		},
 		// idle marks the end of a bx action. If no new action starts soon,
 		// the agent is deciding what to do next: the tag says so, with moving
@@ -194,6 +215,7 @@ const pointerUIJS = `((last) => {
 				text.append(dots);
 				dots.animate([{opacity: .2}, {opacity: 1}], {duration: 600, iterations: Infinity, direction: "alternate"});
 				dots.textContent = "...";
+				measure();
 				halo.animate([{transform: "scale(.6)", opacity: .55}, {transform: "scale(1.5)", opacity: 0}], {duration: 1400, iterations: Infinity});
 			}, 700);
 			host.__rest = setTimeout(() => ui.leave(), quiet);
@@ -365,7 +387,7 @@ func (sess *tabSession) idle() {
 	// working on and wait longer before giving up on it.
 	msg, quiet := "Waiting for the agent", 20*time.Second
 	if title, _ := sess.title.Load().(string); title != "" {
-		msg, quiet = "Working on: "+clipText(title, 48), 2*time.Minute
+		msg, quiet = "Working on: "+clipText(title, 100), 2*time.Minute
 	}
 	m, _ := json.Marshal(msg)
 	ctx, cancel := context.WithTimeout(sess.ctx, 2*time.Second)
