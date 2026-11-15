@@ -593,6 +593,11 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   runBtns.forEach((b) => b.addEventListener("click", () => pick(b, true)));
   pick(runBtns[0], false);
 
+  // One video at a time: starting one pauses the others
+  document.addEventListener("play", (e) => {
+    document.querySelectorAll("video").forEach((v) => { if (v !== e.target) v.pause(); });
+  }, true);
+
   // "bx" unfolds into "browser exec"
   const ex = document.getElementById("expand");
   setTimeout(() => ex.classList.add("open"), 500);
