@@ -124,7 +124,6 @@ const pointerUIJS = `((last) => {
 	// It measures against the part of the page on screen (the visual
 	// viewport), which on a page that isn't responsive can be smaller than
 	// the layout, zoomed or scrolled sideways.
-	let natural = 0;
 	// zoom undoes the page's zoom, so the pointer is the same size on screen
 	// on a page shown zoomed out (a desktop-only page on a phone) or in.
 	const zoom = () => 1 / (window.visualViewport?.scale || 1);
@@ -132,23 +131,29 @@ const pointerUIJS = `((last) => {
 		const v = window.visualViewport;
 		return v ? {l: v.offsetLeft, t: v.offsetTop, r: v.offsetLeft + v.width, b: v.offsetTop + v.height} : {l: 0, t: 0, r: innerWidth, b: innerHeight};
 	};
+	// Widths and the height are measured only when the text or the wrapping
+	// changes; while the pointer glides, placing it is arithmetic and style
+	// writes, so a frame never makes the page lay itself out again.
+	let natural = 0, badgeW = 0, th = 0, laid = "";
 	const place = () => {
-		const B = seen(), k = zoom(), shown = text.style.opacity === "1", extra = badge.offsetWidth + 18 + (shown ? 6 : 0);
+		const B = seen(), k = zoom(), shown = text.style.opacity === "1", extra = badgeW + 18 + (shown ? 6 : 0);
 		const need = Math.min(natural, 440) + extra, right = (B.r - cx) / k - 24, left = (cx - B.l) / k - 12;
 		let side = "right", w = need;
 		if (need > right) {
 			if (need <= left) side = "left";
-			else if (Math.max(right, left) >= 180) { side = right >= left ? "right" : "left"; w = Math.max(right, left); }
-			else { side = "below"; w = Math.min(need, (B.r - B.l) / k - 16); }
+			else if (Math.max(right, left) >= 180) { side = right >= left ? "right" : "left"; w = Math.floor(Math.max(right, left) / 8) * 8; }
+			else { side = "below"; w = Math.floor(Math.min(need, (B.r - B.l) / k - 16) / 8) * 8; }
 		}
-		const wrap = shown && natural > w - extra;
-		if (shown) Object.assign(text.style, {maxWidth: Math.max(40, w - extra) + "px", whiteSpace: wrap ? "normal" : "nowrap",
-			lineHeight: wrap ? "1.3" : "", maxHeight: wrap ? "3.9em" : ""});
-		const tw = Math.min(need, w);
-		// A wrapped tag gets its width set: an absolutely placed box would
-		// otherwise shrink to the pointer layer, which is only the arrow wide.
-		Object.assign(tag.style, {alignItems: wrap ? "baseline" : "center", width: wrap ? tw + "px" : "max-content", boxSizing: "border-box"});
-		const th = tag.offsetHeight;
+		const wrap = shown && natural > w - extra, tw = Math.min(need, w), key = wrap + "|" + tw;
+		if (key !== laid) {
+			if (shown) Object.assign(text.style, {maxWidth: Math.max(40, w - extra) + "px", whiteSpace: wrap ? "normal" : "nowrap",
+				lineHeight: wrap ? "1.3" : "", maxHeight: wrap ? "3.9em" : ""});
+			// A wrapped tag gets its width set: an absolutely placed box would
+			// otherwise shrink to the pointer layer, which is only the arrow wide.
+			Object.assign(tag.style, {alignItems: wrap ? "baseline" : "center", width: wrap ? tw + "px" : "max-content", boxSizing: "border-box"});
+			th = tag.offsetHeight;
+			laid = key;
+		}
 		const x = side === "right" ? 16 : side === "left" ? -tw - 4 : (Math.min(Math.max(cx - 16 * k, B.l + 8 * k), B.r - (8 + tw) * k) - cx) / k;
 		const below = side === "below" ? 30 : 20, up = cy + (below + th + 8) * k > B.b;
 		const sharp = (on) => on && side !== "below" ? "4px" : "10px";
@@ -158,6 +163,8 @@ const pointerUIJS = `((last) => {
 	const measure = () => {
 		text.style.whiteSpace = "nowrap";
 		natural = text.style.opacity === "1" ? text.scrollWidth : 0;
+		badgeW = badge.offsetWidth;
+		laid = "";
 		place();
 	};
 	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0) scale(" + zoom() + ")"; host.__pos = [x, y]; place(); };
