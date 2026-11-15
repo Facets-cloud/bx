@@ -178,7 +178,7 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 			return a["url"]
 		}
 		return cleanURL(a["url"])
-	case "click", "hover", "read", "screenshot":
+	case "click", "hover", "read", "screenshot", "download":
 		return named(a["selector"], names)
 	case "wait":
 		if a["text"] != "" {
@@ -203,6 +203,21 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 		return fmt.Sprintf("%s, %d files", named(a["selector"], names), len(files))
 	case "dialog":
 		return a["action"]
+	case "pdf":
+		return a["name"]
+	case "mouse":
+		return strings.TrimSpace(fmt.Sprintf("%s at %s,%s %s %s", a["action"], a["x"], a["y"], a["dx"], a["dy"]))
+	case "storage-change":
+		d := strings.TrimSpace(a["action"] + " " + a["area"] + " " + a["name"])
+		if a["action"] == "set" {
+			d += " " + secret("value", a["value"])
+		}
+		return d
+	case "mock":
+		if a["remove"] == "true" {
+			return strings.TrimSpace("remove " + a["url"])
+		}
+		return strings.TrimSpace(a["url"] + " " + a["status"])
 	case "start":
 		return a["title"]
 	case "done":

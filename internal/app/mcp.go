@@ -252,6 +252,8 @@ func schema(props map[string]any, required []string) map[string]any {
 }
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+
+func num(desc string) map[string]any { return map[string]any{"type": "number", "description": desc} }
 func integer(desc string) map[string]any {
 	return map[string]any{"type": "integer", "minimum": 0, "description": desc}
 }
@@ -478,6 +480,38 @@ func actTools() []mcpTool {
 				"type": "array", "items": map[string]any{"type": "string"}, "description": "Absolute file paths."}},
 				[]string{"tab", "element", "files"}),
 			run: uploadTool},
+		opTool("download", "Click a link or button that downloads a file, and wait until it is saved. "+
+			"Returns the file's path and size. Use it, not click, for downloads: clicked downloads can be dropped.", "download",
+			map[string]any{"tab": tab, "element": el, "dir": str("Folder to save in. Default: ~/Downloads."),
+				"name": str("File name to save as. Default: the name the site gives. An existing file is never replaced.")},
+			[]string{"tab", "element"}, map[string]string{"tab": "tab", "element": "selector", "dir": "dir", "name": "name"}),
+		opTool("pdf", "Save the page as a PDF, for pages with no download of their own, such as an order or receipt page. "+
+			"Returns the file's path and size.", "pdf",
+			map[string]any{"tab": tab, "dir": str("Folder to save in. Default: ~/Downloads."),
+				"name": str("File name. Default: the page's title. An existing file is never replaced.")},
+			[]string{"tab"}, map[string]string{"tab": "tab", "dir": "dir", "name": "name"}),
+		opTool("mouse", "Click, double-click, right-click, move or scroll at a point, for what has no element to name: "+
+			"a canvas, a map, a chart, a spreadsheet grid. x and y are pixels of a screenshot of the tab.", "mouse",
+			map[string]any{"tab": tab, "action": map[string]any{"type": "string", "enum": []string{"click", "double", "right", "move", "wheel"}},
+				"x": num("Pixels from the left of a screenshot."), "y": num("Pixels from the top of a screenshot."),
+				"dx": num("For wheel: pixels to scroll right."), "dy": num("For wheel: pixels to scroll down.")},
+			[]string{"tab", "action", "x", "y"},
+			map[string]string{"tab": "tab", "action": "action", "x": "x", "y": "y", "dx": "dx", "dy": "dy"}),
+		opTool("change_storage", "Set, delete or clear a cookie, localStorage or sessionStorage item of the tab's site. "+
+			"These are the user's logins: bx shows them a dialog for each change and goes on only if they Allow it. "+
+			"Tell the user what you will change and why before you call it.", "storage-change",
+			map[string]any{"tab": tab, "action": map[string]any{"type": "string", "enum": []string{"set", "delete", "clear"}},
+				"area": map[string]any{"type": "string", "enum": []string{"cookies", "local", "session"}},
+				"name": str("Cookie or item name. Not for clear."), "value": str("For set.")},
+			[]string{"tab", "action", "area"},
+			map[string]string{"tab": "tab", "action": "action", "area": "area", "name": "name", "value": "value"}),
+		opTool("mock", "Answer the tab's requests to matching URLs with a made-up response, to see how the page handles an error "+
+			"or other data. Lasts until removed, the tab closes or bx stops. Returns the tab's mocks.", "mock",
+			map[string]any{"tab": tab, "url": str("URL pattern: * matches any run of characters, such as */api/orders*. With remove and no url: all."),
+				"status": num("HTTP status. Default 200."), "body": str("Response body."),
+				"content_type": str("Default: application/json."), "remove": boolean("Remove the mock for url instead.")},
+			[]string{"tab"},
+			map[string]string{"tab": "tab", "url": "url", "status": "status", "body": "body", "content_type": "content_type", "remove": "remove"}),
 		opTool("dialog", "Accept or dismiss the alert, confirm or prompt open on the tab.", "dialog",
 			map[string]any{"tab": tab, "action": map[string]any{"type": "string", "enum": []string{"accept", "dismiss"}},
 				"text": str("Reply for a prompt.")}, []string{"tab", "action"},

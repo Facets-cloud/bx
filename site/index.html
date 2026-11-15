@@ -365,6 +365,8 @@ docker exec -it api sh</pre>
       <div class="use"><div class="tools"><code>click</code><code>console</code><code>network</code></div><h3>Reproduce a bug behind a login</h3><p>The agent does the steps in your session, then reads the exception with its file and line and the failing request's response body.</p><q>checkout fails on staging, find out why</q></div>
       <div class="use"><div class="tools"><code>emulate</code><code>performance</code></div><h3>Test a page on a slow phone</h3><p>390×844 on slow 3G with a 4× slower CPU, reloaded and measured: LCP, CLS, long tasks and the slowest resources, each rated.</p><q>how does the dashboard load on a phone on 3G?</q></div>
       <div class="use"><div class="tools"><code>storage</code><code>eval</code></div><h3>Inspect the app's state</h3><p>Cookies, localStorage and sessionStorage for the current page, so "why am I logged out" or "which flag is on" gets a real answer.</p><q>which feature flags does my session have?</q></div>
+      <div class="use"><div class="tools"><code>download</code><code>pdf</code></div><h3>Collect invoices and receipts</h3><p>The agent opens each billing page in the profile you're signed in to, saves the invoices to a folder, and turns pages without a download into PDFs. If a site wants a billing address first, it asks you.</p><q>get last month's invoices into ~/Invoices</q></div>
+      <div class="use"><div class="tools"><code>mock</code><code>mouse</code></div><h3>See the error states</h3><p>Answer one API call with a 500 or an empty list and watch how the page copes, without touching the server. Charts, maps and canvases take clicks at a point.</p><q>what does the dashboard show when the orders API fails?</q></div>
       <div class="use"><div class="tools"><code>snapshot</code><code>fill</code><code>read</code></div><h3>Work in consoles you're signed in to</h3><p>Read a cloud console, fill a form, pull a report. bx tells the agent to ask you before it submits, sends, buys or deletes.</p><q>list the failing jobs in our CI dashboard</q></div>
     </div>
   </section>
@@ -476,14 +478,14 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   </section>
 
   <section id="tools">
-    <div class="kicker">// 34 tools</div>
+    <div class="kicker">// 39 tools</div>
     <h2>Everything you'd do by hand, plus DevTools.</h2>
     <p class="sub">The agent snapshots a tab and gets a ref like <code>e12</code> for each element, or names one the way the snapshot shows it: <code>button "Next"</code>. Actions report what changed on the page, and <code>batch</code> runs a whole plan in one call, across screens it hasn't seen yet.</p>
     <div class="tools-grid">
       <div class="group"><h3>Setup <span>5</span></h3><ul><li>doctor</li><li>list_browsers</li><li>setup</li><li>launch</li><li>settings</li></ul></div>
       <div class="group"><h3>Read <span>9</span></h3><ul><li>list_profiles</li><li>list_tabs</li><li>snapshot</li><li>read</li><li>screenshot</li><li>eval</li><li>wait</li><li>history</li><li>pins</li></ul></div>
-      <div class="group"><h3>Act <span>14</span></h3><ul><li>open</li><li>goto</li><li>click</li><li>hover</li><li>drag</li><li>fill</li><li>type</li><li>key</li><li>upload</li><li>dialog</li><li>close_tab</li><li>batch</li><li>start</li><li>done</li></ul></div>
-      <div class="group dbg"><h3>Debug <span>6</span></h3><ul><li>console</li><li>network</li><li>storage</li><li>performance</li><li>emulate</li><li>cdp</li></ul></div>
+      <div class="group"><h3>Act <span>17</span></h3><ul><li>open</li><li>goto</li><li>click</li><li>hover</li><li>drag</li><li>fill</li><li>type</li><li>key</li><li>upload</li><li>download</li><li>pdf</li><li>mouse</li><li>dialog</li><li>close_tab</li><li>batch</li><li>start</li><li>done</li></ul></div>
+      <div class="group dbg"><h3>Debug <span>8</span></h3><ul><li>console</li><li>network</li><li>storage</li><li>change_storage</li><li>mock</li><li>performance</li><li>emulate</li><li>cdp</li></ul></div>
     </div>
   </section>
 
@@ -590,6 +592,11 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   };
   runBtns.forEach((b) => b.addEventListener("click", () => pick(b, true)));
   pick(runBtns[0], false);
+
+  // One video at a time: starting one pauses the others
+  document.addEventListener("play", (e) => {
+    document.querySelectorAll("video").forEach((v) => { if (v !== e.target) v.pause(); });
+  }, true);
 
   // "bx" unfolds into "browser exec"
   const ex = document.getElementById("expand");

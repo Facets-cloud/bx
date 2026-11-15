@@ -24,6 +24,14 @@ logins and cookies.
   background process over a Unix socket in `~/Library/Application Support/bx/`,
   a folder only your user account can open. Any process running as you can
   use that socket, as it could use your browser anyway.
+- **You allow each storage change.** Changing a site's cookies or storage
+  (`change_storage`, `bx storage <tab> set|delete|clear`) waits for you to
+  click Allow in a macOS dialog that bx shows outside the browser. Deny is
+  the default, and no answer within a minute counts as Deny. On other
+  systems bx refuses these changes.
+- **Downloads go where you say.** `download` and `pdf` save into
+  `~/Downloads` or the folder named, under a name that can't point outside
+  it, and never replace an existing file.
 - **No telemetry.** bx sends nothing anywhere. Its only network calls are
   `bx update`, `bx doctor` and a once-a-day release check at a terminal,
   all to GitHub's release API.
@@ -33,6 +41,10 @@ logins and cookies.
   file and about URLs, so a URL can't be read as a browser flag.
 
 ## What it doesn't protect against
+
+- **Software that can click for you.** The storage dialog stops an agent
+  that only has bx. A program with macOS Accessibility permission (or one
+  you run that controls the Mac) can press Allow.
 
 - **Prompt injection.** An agent that reads a malicious page can be told,
   by text on that page, to act in another tab. bx can't tell your
