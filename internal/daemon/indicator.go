@@ -116,7 +116,20 @@ const pointerUIJS = `((last) => {
 
 	let [cx, cy] = last || [innerWidth / 2, innerHeight / 2];
 	let frame = 0;
-	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; };
+	// The tag keeps inside the page: near the right edge it slides left, under
+	// the pointer, and a long status is cut with an ellipsis to the page's width.
+	let tagW = 0;
+	const place = () => {
+		const over = cx + 16 + tagW - (innerWidth - 8);
+		tag.style.left = (over > 0 ? Math.max(16 - over, 8 - cx) : 16) + "px";
+	};
+	const measure = () => {
+		const shown = text.style.opacity === "1", room = Math.max(0, Math.min(360, innerWidth - 64));
+		if (shown) text.style.maxWidth = room + "px";
+		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(text.scrollWidth, room) : 0);
+		place();
+	};
+	const put = (x, y) => { cx = x; cy = y; ptr.style.transform = "translate3d(" + x + "px," + y + "px,0)"; host.__pos = [x, y]; place(); };
 	// The element the pointer is on, and where on it. A pointer pinned to
 	// the screen drifts off its element as soon as the page scrolls.
 	let target = null, offX = 0, offY = 0;
@@ -127,7 +140,7 @@ const pointerUIJS = `((last) => {
 		put(r.x + offX, r.y + offY);
 	};
 	addEventListener("scroll", () => requestAnimationFrame(follow), {capture: true, passive: true});
-	addEventListener("resize", () => requestAnimationFrame(follow), {passive: true});
+	addEventListener("resize", () => requestAnimationFrame(() => { follow(); measure(); }), {passive: true});
 	new ResizeObserver(() => requestAnimationFrame(follow)).observe(document.documentElement);
 	const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 	const ui = {host, root, ripple,
@@ -180,6 +193,7 @@ const pointerUIJS = `((last) => {
 			Object.assign(ptr.style, {opacity: "1"});
 			text.textContent = msg;
 			Object.assign(text.style, {maxWidth: "360px", marginLeft: "6px", opacity: "1"});
+			measure();
 		},
 		// idle marks the end of a bx action. If no new action starts soon,
 		// the agent is deciding what to do next: the tag says so, with moving
@@ -194,6 +208,7 @@ const pointerUIJS = `((last) => {
 				text.append(dots);
 				dots.animate([{opacity: .2}, {opacity: 1}], {duration: 600, iterations: Infinity, direction: "alternate"});
 				dots.textContent = "...";
+				measure();
 				halo.animate([{transform: "scale(.6)", opacity: .55}, {transform: "scale(1.5)", opacity: 0}], {duration: 1400, iterations: Infinity});
 			}, 700);
 			host.__rest = setTimeout(() => ui.leave(), quiet);
