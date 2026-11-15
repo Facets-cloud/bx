@@ -43,7 +43,7 @@ type tabSession struct {
 	refLoader cdp.LoaderID // the document those refs belong to
 	snap      []SnapNode   // the latest snapshot, for the changes an action reports
 	pointer   *[2]float64  // where bx's on-page pointer last stood, to carry it across pages
-	fast      atomic.Bool  // fast mode, the default; false when the request asked for watch mode (BX_MODE=watch)
+	fast      atomic.Bool  // full pace, the default; false when the request asked for human pace (pace human)
 	keyTyping atomic.Bool  // the current request asked to type key by key (BX_TYPING=keys)
 	title     atomic.Value // string: the title of the agent session acting on the tab, if it gave one
 	step      atomic.Value // string: "3/32" while a batch runs, shown in the pointer's tag

@@ -14,11 +14,11 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// In watch mode (BX_MODE=watch on the client, sent with each request) bx
-// acts at human pace: the mouse travels to what it clicks, clicks land a
-// little off-centre and are held briefly, and batch steps pause between
-// them, the way a person uses a page, which some sites expect. In fast
-// mode, the default, it does none of that.
+// At human pace (pace human, from the task, BX_PACE or the config) bx acts
+// the way a person uses a page, which some sites expect: the mouse travels
+// to what it clicks, clicks land a little off-centre and are held briefly,
+// and batch steps pause between them. At full pace, the default, it does
+// none of that.
 
 // between returns a random duration in [lo, hi). Timing jitter, not a secret.
 func between(lo, hi time.Duration) time.Duration {
@@ -93,8 +93,8 @@ func (sess *tabSession) press(ctx context.Context, e elem, verb string, double b
 
 // enter puts text where the focus is. By default it pastes it in one go
 // (Input.insertText, which fires the same beforeinput and input events as
-// a paste or an IME). With BX_TYPING=keys it types key by key instead: at
-// once in fast mode, and in watch mode with a 35-110ms gap between keys
+// a paste or an IME). With typing keys it types key by key instead: at
+// once at full pace, and at human pace with a 35-110ms gap between keys
 // and a little longer after spaces and punctuation.
 func (sess *tabSession) enter(ctx context.Context, text string) error {
 	if !sess.keyTyping.Load() && sess.paste(ctx, text) {
@@ -233,7 +233,7 @@ func (sess *tabSession) typingVerb(text string) string {
 	return fmt.Sprintf("Paste %d characters", n)
 }
 
-// stepPause is the pause between batch steps in watch mode.
+// stepPause is the pause between batch steps at human pace.
 func (sess *tabSession) stepPause() {
 	if !sess.fast.Load() {
 		time.Sleep(between(150*time.Millisecond, 450*time.Millisecond))

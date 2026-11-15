@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,26 +86,11 @@ func Call(browser string, req Request, out any, start bool) error {
 	if req.Args["project"] == "" {
 		req.Args["project"] = projectDir()
 	}
-	if os.Getenv("BX_TYPING") == "keys" {
-		// Type key by key instead of pasting text in one go.
-		if req.Args == nil {
-			req.Args = map[string]string{}
-		}
-		req.Args["typing"] = "keys"
+	if req.Args == nil {
+		req.Args = map[string]string{}
 	}
-	if os.Getenv("BX_MODE") == "watch" {
-		// Watch mode: an on-page pointer narrates each action, at human pace.
-		if req.Args == nil {
-			req.Args = map[string]string{}
-		}
-		req.Args["mode"] = "watch"
-	}
-	if os.Getenv("BX_FOLLOW") == "1" {
-		// Bring each tab bx works in to the front, so the user can watch.
-		if req.Args == nil {
-			req.Args = map[string]string{}
-		}
-		req.Args["follow"] = "true"
+	for k, v := range howToWork() {
+		req.Args[k] = v
 	}
 	sock, lock, log, err := paths(browser)
 	if err != nil {
@@ -242,6 +228,25 @@ func errorResponse(err error) Response {
 		return Response{Error: e.Msg, Code: e.Code}
 	}
 	return Response{Error: fmt.Sprint(err), Code: exit.Upstream}
+}
+
+// howToWork is mode, pace and typing for this process's requests: the
+// environment's BX_MODE, BX_PACE and BX_TYPING, else the config's. A
+// task's own choices (start) override them in the daemon. BX_FOLLOW=1, the
+// old way to bring tabs to the front, means watch.
+func howToWork() map[string]string {
+	c := LoadConfig()
+	out := map[string]string{}
+	for _, k := range []string{"mode", "pace", "typing"} {
+		out[k] = c.Choice(k)
+		if v := os.Getenv("BX_" + strings.ToUpper(k)); slices.Contains(choices[k], v) {
+			out[k] = v
+		}
+	}
+	if os.Getenv("BX_FOLLOW") == "1" && os.Getenv("BX_MODE") == "" {
+		out["mode"] = "watch"
+	}
+	return out
 }
 
 // SessionID names the agent session this process's requests belong to.

@@ -72,3 +72,59 @@ func TestTabErr(t *testing.T) {
 		t.Fatal("exit errors pass through")
 	}
 }
+
+func TestFollows(t *testing.T) {
+	s := &server{tasks: map[string]*task{}}
+	if s.follows(map[string]string{}) {
+		t.Error("fast mode with no BX_FOLLOW should not follow")
+	}
+	if !s.follows(map[string]string{"mode": "watch"}) {
+		t.Error("a watch-mode request should follow")
+	}
+	s.taskFor("a").mode = "watch"
+	if !s.follows(map[string]string{"session": "a"}) {
+		t.Error("a task started in watch mode should follow")
+	}
+	s.taskFor("b").mode = "fast"
+	if s.follows(map[string]string{"session": "b", "mode": "watch"}) {
+		t.Error("a task that chose fast mode should not follow")
+	}
+}
+
+func TestHowToWork(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, k := range []string{"BX_MODE", "BX_PACE", "BX_TYPING", "BX_FOLLOW"} {
+		t.Setenv(k, "")
+	}
+	want := func(mode, pace, typing string) {
+		t.Helper()
+		got := howToWork()
+		if got["mode"] != mode || got["pace"] != pace || got["typing"] != typing {
+			t.Errorf("howToWork() = %v, want mode %s pace %s typing %s", got, mode, pace, typing)
+		}
+	}
+	want("fast", "full", "paste")
+	c := LoadConfig()
+	for k, v := range map[string]string{"mode": "watch", "pace": "human"} {
+		if err := c.Set(k, v, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SaveConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	want("watch", "human", "paste")
+	t.Setenv("BX_MODE", "fast")
+	t.Setenv("BX_TYPING", "keys")
+	want("fast", "human", "keys")
+	t.Setenv("BX_MODE", "")
+	t.Setenv("BX_FOLLOW", "1") // the old name for watch
+	c.Mode = ""
+	if err := SaveConfig(c); err != nil {
+		t.Fatal(err)
+	}
+	want("watch", "human", "keys")
+	if err := c.Set("pace", "slow", false); err == nil {
+		t.Error("pace slow should be refused")
+	}
+}

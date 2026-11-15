@@ -121,12 +121,14 @@ debugging on. To pin one, pass `browser` in a tool call, or set it for the
 whole server:
 
 ```json
-"env": { "BX_BROWSER": "chrome", "BX_FOLLOW": "1" }
+"env": { "BX_BROWSER": "chrome" }
 ```
 
-`BX_FOLLOW=1` brings each tab the agent opens or acts in to the front of
-its window, so you can watch. Leave it out and the agent works in
-background tabs while you keep using the browser.
+By default the agent works in background tabs at full speed while you
+keep using the browser. Say "show me" and it brings each tab it works in
+to the front; say "at human pace" and it slows down. To change the
+defaults, run `bx config set mode watch` or `bx config set pace human`;
+the CLI and every MCP app read the same settings.
 
 To skip the Allow dialog entirely, the `launch` tool starts a separate
 copy of the browser just for agents, with its own profile and logins.

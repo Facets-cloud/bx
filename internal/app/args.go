@@ -13,7 +13,7 @@ var valueFlags = map[string]string{
 	"-o": "output", "--output": "output",
 	"--browser": "browser", "--profile": "profile",
 	"--selector": "selector", "--format": "format",
-	"--out": "out", "--tab": "tab", "--timeout": "timeout", "--within": "within", "--into": "into", "--blur": "blur", "--mode": "mode", "--typing": "typing",
+	"--out": "out", "--tab": "tab", "--timeout": "timeout", "--within": "within", "--into": "into", "--blur": "blur", "--mode": "mode", "--pace": "pace", "--typing": "typing",
 	"--text": "text", "--submit": "submit", "--file": "file", "--name": "name", "--status": "status", "--body": "body", "--type": "type",
 	"--since": "since", "--limit": "limit", "--task": "task", "--request": "request",
 	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",

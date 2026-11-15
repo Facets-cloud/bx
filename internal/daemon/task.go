@@ -16,6 +16,7 @@ type task struct {
 	mu      sync.Mutex
 	title   string
 	mode    string // "fast" or "watch"; empty means the request's own
+	pace    string // "full" or "human"; empty means the request's own
 	typing  string // "paste" or "keys"; empty means the request's own
 	started time.Time
 	actions int
@@ -62,7 +63,7 @@ func (s *server) taskTitle(id string) string {
 	return t.title
 }
 
-// start names the session and sets its mode and typing; they override
+// start names the session and sets its mode, pace and typing; they override
 // what each request carries for the rest of the session.
 func (s *server) start(a map[string]string) (any, error) {
 	t := s.taskFor(a["session"])
@@ -71,18 +72,18 @@ func (s *server) start(a map[string]string) (any, error) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.title, t.mode, t.typing = a["title"], a["task_mode"], a["task_typing"]
+	t.title, t.mode, t.pace, t.typing = a["title"], a["task_mode"], a["task_pace"], a["task_typing"]
 	return map[string]string{"session": t.id, "title": t.title}, nil
 }
 
 // apply sets a tab's pointer and pacing for a request: the session's
 // choices when it made them, else the request's.
 func (t *task) apply(sess *tabSession, a map[string]string) {
-	mode, typing := a["mode"], a["typing"]
+	pace, typing := a["pace"], a["typing"]
 	if t != nil {
 		t.mu.Lock()
-		if t.mode != "" {
-			mode = t.mode
+		if t.pace != "" {
+			pace = t.pace
 		}
 		if t.typing != "" {
 			typing = t.typing
@@ -94,7 +95,7 @@ func (t *task) apply(sess *tabSession, a map[string]string) {
 	} else {
 		sess.title.Store("")
 	}
-	sess.fast.Store(mode != "watch")
+	sess.fast.Store(pace != "human")
 	sess.keyTyping.Store(typing == "keys")
 }
 

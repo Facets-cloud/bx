@@ -40,6 +40,7 @@ type server struct {
 	tasks     map[string]*task                // agent sessions, by id
 	auditMu   sync.Mutex                      // one audit log write at a time
 	lastURL   map[string]string               // each tab's URL as of its last logged request
+	shown     string                          // the tab bx last brought to the front
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -197,8 +198,8 @@ func (s *server) dispatch(req Request) (any, error) {
 			cancel()
 			sess.idle()
 		}
-		if err == nil && a["follow"] == "true" {
-			_, _ = s.front(tab.ID)
+		if err == nil && s.follows(a) {
+			s.bringForward(string(tab.ID))
 		}
 		if err == nil {
 			tab.Page = s.changes(tab.ID)
@@ -228,8 +229,8 @@ func (s *server) dispatch(req Request) (any, error) {
 			sess.narrate(req.Op, a)
 		}
 	}
-	if a["follow"] == "true" && a["tab"] != "" && req.Op != "front" {
-		_, _ = s.front(a["tab"]) // best effort: never fail the op over it
+	if a["tab"] != "" && req.Op != "front" && s.follows(a) {
+		s.bringForward(a["tab"])
 	}
 	res, err := s.dispatchTab(req.Op, a, t)
 	if sess, serr := s.session(a["tab"]); serr == nil && req.Op != "dialog" {
@@ -326,6 +327,33 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.networkList(id, a["errors"] == "true", atoi(a["since"]), atoi(a["limit"]))
 	}
 	return nil, exit.New(exit.Validation, "unknown daemon op %q", op)
+}
+
+// follows reports whether the request is in watch mode, from its task or
+// itself. Then the tab bx works in comes to the front, so a task that
+// moves between profiles stays in view.
+func (s *server) follows(a map[string]string) bool {
+	mode := a["mode"]
+	if t := s.taskFor(a["session"]); t != nil {
+		t.mu.Lock()
+		if t.mode != "" {
+			mode = t.mode
+		}
+		t.mu.Unlock()
+	}
+	return mode == "watch"
+}
+
+// bringForward brings tab to the front when bx moves to it from another tab; a
+// tab already in front is left alone, so bx doesn't keep raising the
+// browser while it works in one tab. Best effort: an op never fails over it.
+func (s *server) bringForward(tab string) {
+	s.mu.Lock()
+	same := s.shown == tab
+	s.mu.Unlock()
+	if !same {
+		_, _ = s.front(tab)
+	}
 }
 
 // forgetClosedTabs drops a tab's session when the browser closes the tab.
@@ -437,7 +465,7 @@ func (s *server) waitFor(match func(*target.Info) bool) (*target.Info, error) {
 	return nil, exit.New(exit.Upstream, "no matching tab appeared within 10s")
 }
 
-// narrate shows, in watch mode, what an op that has no element to point at
+// narrate shows, at human pace, what an op that has no element to point at
 // is about to do. Actions that point at an element say so themselves.
 func (sess *tabSession) narrate(op string, a map[string]string) {
 	msg := map[string]string{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -16,7 +17,31 @@ import (
 // read it all and raise retention (see Settings).
 type Config struct {
 	Browser string    `json:"browser,omitempty"` // set by bx use
+	Mode    string    `json:"mode,omitempty"`    // fast (default) or watch: whether the browser comes to the front
+	Pace    string    `json:"pace,omitempty"`    // full (default) or human
+	Typing  string    `json:"typing,omitempty"`  // paste (default) or keys
 	Log     LogConfig `json:"log"`
+}
+
+// The choices for how bx works, and their defaults. Mode is where the
+// browser is: fast leaves it where it is, watch brings the tab bx works in
+// to the front. Pace is how fast bx acts, in either mode. Typing is how
+// text goes in. The defaults come from here; BX_MODE, BX_PACE and
+// BX_TYPING override them for one process; an agent's start call
+// overrides both for its task.
+var choices = map[string][]string{
+	"mode":   {"fast", "watch"},
+	"pace":   {"full", "human"},
+	"typing": {"paste", "keys"},
+}
+
+// Choice is the configured value for mode, pace or typing, or its default.
+func (c Config) Choice(key string) string {
+	v := map[string]string{"mode": c.Mode, "pace": c.Pace, "typing": c.Typing}[key]
+	if v == "" {
+		return choices[key][0]
+	}
+	return v
 }
 
 // LogConfig is how the session logs are written and kept. Zero values mean
@@ -127,10 +152,13 @@ type Setting struct {
 	About   string `json:"about"`
 }
 
-// Settings lists the log settings with their current values.
+// Settings lists the settings with their current values.
 func (c Config) Settings() []Setting {
 	l := c.Log
 	return []Setting{
+		{"mode", c.Choice("mode"), "fast", "fast: the browser stays where it is; watch: the tab bx works in comes to the front"},
+		{"pace", c.Choice("pace"), "full", "full: act at once; human: glide the pointer and pause between steps, to follow along"},
+		{"typing", c.Choice("typing"), "paste", "paste: put text in at once; keys: type key by key, for sites that ignore pasted text"},
 		{"log.values", l.values(), "on", "on: log actions, not what was typed; full: typed values too; off: no log"},
 		{"log.days", strconv.Itoa(l.days()), strconv.Itoa(DefaultLogDays), "delete sessions older than this many days; 0 keeps them (the size limits still apply)"},
 		{"log.max", orDefault(l.Max, DefaultLogMax), DefaultLogMax, "plain session files may take this much; past it the oldest are gzipped"},
@@ -145,7 +173,7 @@ func orDefault(v, def string) string {
 	return v
 }
 
-// Set changes one log setting. With fromAgent set, it refuses any change
+// Set changes one setting. For the log settings, with fromAgent set, it refuses any change
 // that would log less or keep logs for less (an agent must not be able to
 // hide its own actions), and changing log.values at all, since full would
 // write typed passwords to disk.
@@ -158,6 +186,11 @@ func (c *Config) Set(key, value string, fromAgent bool) error {
 		return nil
 	}
 	switch key {
+	case "mode", "pace", "typing":
+		if !slices.Contains(choices[key], value) {
+			return exit.New(exit.Validation, "%s is %s", key, strings.Join(choices[key], " or "))
+		}
+		*map[string]*string{"mode": &c.Mode, "pace": &c.Pace, "typing": &c.Typing}[key] = value
 	case "log.values":
 		if value != "on" && value != "full" && value != "off" {
 			return exit.New(exit.Validation, "log.values is on, full or off")
