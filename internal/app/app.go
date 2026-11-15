@@ -98,8 +98,11 @@ Record (a video of what bx does, pointer included; follows bx from tab to tab):
   bx record stop [--out <file.mp4>] stop; makes the video with ffmpeg if installed
 
 Session (one agent's task: the on-page pointer shows its title between calls):
-  bx start "<title>" [--mode fast|watch] [--typing paste|keys]
-                                    begin a task; $BX_SESSION names it (default: one CLI session)
+  bx start "<title>" [--mode fast|watch] [--pace full|human] [--typing paste|keys]
+                                    begin a task; $BX_SESSION names it (default: one CLI session).
+                                    watch brings the tab bx works in to the front; human
+                                    slows each step down. Default: bx config, then BX_MODE,
+                                    BX_PACE and BX_TYPING
   bx done ["<summary>"]             the agent finished its browser work: the on-page
                                     pointer shows Done and the summary, then goes away
   bx history [<session>|current|previous] [--limit <n>]
@@ -110,9 +113,9 @@ Session (one agent's task: the on-page pointer shows its title between calls):
                                     to do again later; pins are never deleted
   bx history pinned [<name>]        list pins, or show one as steps to follow again
   bx history unpin <name>
-  bx config                         the log settings: log.values, log.days, log.max,
-                                    log.archive_max, with their defaults
-  bx config set <key> <value>       change one, such as bx config set log.days 365
+  bx config                         the settings: mode, pace, typing and the log settings
+                                    (log.values, log.days, log.max, log.archive_max)
+  bx config set <key> <value>       change one, such as bx config set mode watch
   bx status                         show the background connection, if any
   bx stop                           close it (the browser asks to Allow again next time);
                                     for an agent browser, also quits it

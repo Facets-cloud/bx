@@ -293,7 +293,9 @@ func readTools() []mcpTool {
 				text, err := historyText(argString(args, "session"), limit)
 				return mcpContent{text: text}, err
 			}},
-		{Name: "settings", Description: "Read bx's log settings (log.values, log.days, log.max, log.archive_max), or change one with key and value. " +
+		{Name: "settings", Description: "Read bx's settings, or change one with key and value. mode, pace and typing are the defaults " +
+			"for every task (change them only when the user asks for a new default; for one task, use start). " +
+			"The log settings are log.values, log.days, log.max and log.archive_max. " +
 			"You may only raise retention (more days, bigger limits). Lowering logging, or changing log.values, is for the user: " +
 			"the error gives the command for them to run.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
@@ -517,11 +519,14 @@ func actTools() []mcpTool {
 				"text": str("Reply for a prompt.")}, []string{"tab", "action"},
 			map[string]string{"tab": "tab", "action": "action", "text": "text"}),
 		opTool("start", "Call first in a browser task; the page's pointer shows the title between your calls. "+
-			"mode watch: human pace, when the user wants to watch. typing keys: key by key. Call again to change them.", "start",
+			"mode watch brings the tab you work in to the front, when the user wants to see it (\"show me\", \"let me watch\"); "+
+			"fast leaves the browser where it is. pace human slows each step down, only when the user asks for it. "+
+			"Leave out what the user didn't ask for: their settings apply. Call again to change them.", "start",
 			map[string]any{"title": str("The task, in a few words."),
 				"mode":   map[string]any{"type": "string", "enum": []string{"fast", "watch"}},
+				"pace":   map[string]any{"type": "string", "enum": []string{"full", "human"}},
 				"typing": map[string]any{"type": "string", "enum": []string{"paste", "keys"}}},
-			[]string{"title"}, map[string]string{"title": "title", "mode": "task_mode", "typing": "task_typing"}),
+			[]string{"title"}, map[string]string{"title": "title", "mode": "task_mode", "pace": "task_pace", "typing": "task_typing"}),
 		opTool("done", "Call this once when you have finished the user's browser task, with a one-line summary such as "+
 			"\"Filled the access form, not submitted\". The pointer on the page shows Done and your summary, then goes away. "+
 			"It returns the tabs the task opened: they stay open; close the ones the user doesn't need with close_tab. "+

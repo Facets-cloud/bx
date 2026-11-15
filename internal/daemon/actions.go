@@ -366,6 +366,9 @@ func (s *server) front(id string) (any, error) {
 	if _, err := cdp.Call(ctx, sess.t, page.BringToFront, cdp.Empty{}); err != nil {
 		return nil, upstream("bring to front", err)
 	}
+	s.mu.Lock()
+	s.shown = id
+	s.mu.Unlock()
 	return nil, nil
 }
 

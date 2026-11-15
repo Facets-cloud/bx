@@ -58,7 +58,7 @@ Measured:
 
 - `snapshot --interactive` of a Wikipedia article: 29 KB instead of 155 KB
   for the full tree. `--within e12` shows one part of the page.
-- A six-step signup wizard ran as one 32-step `batch`: 8 s in fast mode.
+- A six-step signup wizard ran as one 32-step `batch`: 8 s at full pace.
 - The MCP server uses about 29 MB of memory (about 95 MB started through
   npx).
 
@@ -86,15 +86,18 @@ profile once, reads which context it landed in, and closes it.
 
 You choose per task, in plain words. The agent passes your choice to bx's
 `start` tool, and can call `start` again to change it halfway through.
+There are two separate choices: where the browser is (mode) and how fast
+bx goes (pace).
 
-| You say | Mode | What happens |
-| --- | --- | --- |
-| nothing | `fast` (default) | The pointer jumps to each element and each step runs as soon as the page settles. |
-| "let me watch", "go slowly" | `watch` | The pointer glides along a curve with the real mouse, clicks land near the middle rather than on it, a native dropdown unfolds to the choice, and batch steps pause briefly. |
+| You say | Mode | Pace | What happens |
+| --- | --- | --- | --- |
+| nothing, or "in the background" | `fast` (default) | `full` (default) | The browser stays where it is, so you keep working. Each step runs as soon as the page settles. |
+| "show me", "let me watch" | `watch` | `full` | The tab bx works in comes to the front, and follows bx from tab to tab and profile to profile. |
+| "at human pace", "slowly" | (unchanged) | `human` | The pointer glides with the real mouse, clicks land near the middle rather than on it, a native dropdown unfolds to the choice, and batch steps pause briefly. |
 
-A 32-step form took 8 s in fast mode and 50 s in watch mode. Both modes open
-new tabs in front, scroll what they act on into view, and send real mouse
-and keyboard events, the kind a page can't tell from yours.
+A 32-step form took 8 s at full pace and 50 s at human pace. Every mode
+opens new tabs in front, scrolls what it acts on into view, and sends real
+mouse and keyboard events, the kind a page can't tell from yours.
 
 `typing` is `paste` (default: the text goes in at once, as a paste, which
 plain fields, rich text editors and autocompletes accept) or `keys` (typed
@@ -206,20 +209,30 @@ reports. At a terminal, bx mentions a newer release at most once a day.
 
 ### Defaults
 
-Environment variables where the agent starts bx set what it does when the
-agent doesn't say. What the agent passes to `start` wins.
+bx's settings say what it does when the agent doesn't. They live in one
+file that the CLI and every MCP app read, so they agree:
 
-| Variable | Values | Default |
-| --- | --- | --- |
-| `BX_MODE` | `fast`, `watch` | `fast` |
-| `BX_TYPING` | `paste`, `keys` | `paste` |
-| `BX_BROWSER` | `brave`, `chrome`, `brave-agent`, ... | see `bx use` |
+```sh
+bx config                      # list them
+bx config set mode watch       # bring the browser to the front by default
+bx config set pace human       # act at human pace by default
+bx config set typing keys      # type key by key by default
+```
 
-With the plugin, `export` them in your shell profile and restart the app.
-With `claude mcp add`, pass `-e BX_MODE=watch`. Codex without the plugin
-takes `env = { BX_MODE = "watch" }` under `[mcp_servers.bx]` in
-`~/.codex/config.toml`, and other MCP apps take an `env` object in the
-server entry.
+You can also ask the agent ("make watch my default"); it uses the
+`settings` tool. What the agent passes to `start` for a task wins over
+the settings.
+
+| Setting | Values | Default | Environment override |
+| --- | --- | --- | --- |
+| `mode` | `fast`, `watch` | `fast` | `BX_MODE` |
+| `pace` | `full`, `human` | `full` | `BX_PACE` |
+| `typing` | `paste`, `keys` | `paste` | `BX_TYPING` |
+| browser | `brave`, `chrome`, `brave-agent`, ... | see `bx use` | `BX_BROWSER` |
+
+The environment variables override the settings for one process, such as
+a single command (`BX_PACE=human bx batch ...`). `BX_FOLLOW=1` from
+earlier versions still works and means `BX_MODE=watch`.
 
 ## Tools
 

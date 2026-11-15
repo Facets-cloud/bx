@@ -316,13 +316,13 @@ func cmdDone(e env) error {
 	return nil
 }
 
-// cmdStart names the CLI's agent session and sets its mode and typing,
+// cmdStart names the CLI's agent session and sets its mode, pace and typing,
 // which the on-page pointer and pacing follow until bx done.
 func cmdStart(e env) error {
 	if len(e.pos) == 0 {
-		return exit.New(exit.Validation, `usage: bx start "<title>" [--mode fast|watch] [--typing paste|keys]`)
+		return exit.New(exit.Validation, `usage: bx start "<title>" [--mode fast|watch] [--pace full|human] [--typing paste|keys]`)
 	}
-	args := map[string]string{"title": strings.Join(e.pos, " "), "task_mode": e.a.flags["mode"], "task_typing": e.a.flags["typing"]}
+	args := map[string]string{"title": strings.Join(e.pos, " "), "task_mode": e.a.flags["mode"], "task_pace": e.a.flags["pace"], "task_typing": e.a.flags["typing"]}
 	if err := daemon.Call(e.b.Name, daemon.Request{Op: "start", Args: args}, nil, true); err != nil {
 		return err
 	}

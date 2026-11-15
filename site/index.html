@@ -343,7 +343,7 @@ docker exec -it api sh</pre>
   <section id="runs">
     <div class="kicker">// real runs</div>
     <h2>Everyday errands, recorded from real runs.</h2>
-    <p class="sub">Each one is a single prompt to Claude with bx, recorded with <code>bx record</code> in watch mode: the agent's real tool calls on the left, the browser with bx's pointer on the right. Pauses while the model thinks are shortened. Private data is blurred; nothing was sent, submitted or bought.</p>
+    <p class="sub">Each one is a single prompt to Claude with bx, recorded with <code>bx record</code> at human pace: the agent's real tool calls on the left, the browser with bx's pointer on the right. Pauses while the model thinks are shortened. Private data is blurred; nothing was sent, submitted or bought.</p>
     <div class="runs">
       <div class="runs-player"><video id="runvid" controls playsinline preload="metadata"></video></div>
       <ol class="runs-list" id="runlist">
@@ -374,41 +374,40 @@ docker exec -it api sh</pre>
   <section id="modes">
     <div class="kicker">// watch or fast</div>
     <h2>Watch it work, or let it run.</h2>
-    <p class="sub">bx has two modes. Both use the same browser, profiles and logins, open tabs in front, and send real mouse and keyboard events, which a page can't tell from yours. In both, a pointer tagged "bx" shows where it's acting and says what it's doing, or that it's waiting for the agent.</p>
+    <p class="sub">bx has two modes. Both use the same browser, profiles and logins, run at full speed, and send real mouse and keyboard events, which a page can't tell from yours. In both, a pointer tagged "bx" shows where it's acting and says what it's doing, or that it's waiting for the agent.</p>
     <div class="modes">
       <div class="mode hi">
         <div class="lbl">Default</div>
-        <h3>Fast mode <code>BX_MODE=fast</code></h3>
+        <h3>Fast mode <code>mode fast</code></h3>
         <ul>
+          <li>The browser stays where it is, so you keep working.</li>
           <li>The pointer jumps to each element and says what it's doing.</li>
-          <li>No pacing: each step runs as soon as the page settles.</li>
-          <li>Text is pasted in one go.</li>
-          <li>Same logins, same profiles, same tools.</li>
+          <li>Each step runs as soon as the page settles.</li>
         </ul>
         <div class="time">8s<span>for a 32-step form</span></div>
       </div>
       <div class="mode">
         <div class="lbl">To see it work</div>
-        <h3>Watch mode <code>BX_MODE=watch</code></h3>
+        <h3>Watch mode <code>mode watch</code></h3>
         <ul>
-          <li>The pointer glides to each element, and the real mouse travels with it.</li>
-          <li>In a batch, the tag shows the step it's on, such as 7/32.</li>
-          <li>Human pace: the mouse travels to what it clicks, and dropdowns open to the choice.</li>
+          <li>The tab bx works in comes to the front.</li>
+          <li>It follows bx from tab to tab and profile to profile.</li>
+          <li>Still full speed. Ask for human pace and the pointer glides with the real mouse, steps pause, and dropdowns open to the choice.</li>
         </ul>
-        <div class="time">50s<span>for the same form</span></div>
+        <div class="time">50s<span>for the same form, at human pace</span></div>
       </div>
     </div>
-    <figure class="shot"><img src="watch.jpg" alt="A signup form in the browser. bx's pointer sits on the Name field with a tag that reads: bx 7/32 · Fill Name." width="1079" height="658"><figcaption>Watch mode, step 7 of a 32-step batch. Screenshots and snapshots leave the pointer out.</figcaption></figure>
+    <figure class="shot"><img src="watch.jpg" alt="A signup form in the browser. bx's pointer sits on the Name field with a tag that reads: bx 7/32 · Fill Name." width="1079" height="658"><figcaption>Human pace, step 7 of a 32-step batch. Screenshots and snapshots leave the pointer out.</figcaption></figure>
     <div class="settings">
       <div class="vars">
-        <p style="margin:0 0 14px;font-size:16px;color:var(--fg)"><b>Just ask your agent.</b> "Let me watch", "go slowly", "this site ignores pasted text": the agent sets the mode for that task through bx's <code>start</code> tool. Nothing to configure.</p>
+        <p style="margin:0 0 14px;font-size:16px;color:var(--fg)"><b>Just ask your agent.</b> "Show me", "do it in the background", "at human pace": the agent sets the mode and pace for that task through bx's <code>start</code> tool. Nothing to configure.</p>
         <table>
-          <tr><th>Default</th><th>For power users: what bx does when the agent doesn't say</th></tr>
-          <tr><td><code>BX_MODE</code></td><td><code>fast</code> (default) or <code>watch</code>.</td></tr>
-          <tr><td><code>BX_TYPING</code></td><td><code>paste</code> (default) puts text in at once, as a paste does. <code>keys</code> types key by key, for sites that react only to key presses.</td></tr>
-          <tr><td><code>BX_BROWSER</code></td><td>Which browser: <code>brave</code>, <code>chrome</code>, or <code>brave-agent</code> for the separate one <code>launch</code> starts.</td></tr>
+          <tr><th>Setting</th><th>What bx does when the agent doesn't say</th></tr>
+          <tr><td><code>mode</code></td><td><code>fast</code> (default) leaves the browser where it is; <code>watch</code> brings it to the front.</td></tr>
+          <tr><td><code>pace</code></td><td><code>full</code> (default) or <code>human</code>, in either mode.</td></tr>
+          <tr><td><code>typing</code></td><td><code>paste</code> (default) puts text in at once, as a paste does. <code>keys</code> types key by key, for the rare site that reacts only to key presses.</td></tr>
         </table>
-        <p>Set these where your agent starts bx, then restart the agent. What an agent asks for in <code>start</code> wins, and each agent session keeps its own settings.</p>
+        <p>Change a default with <code>bx config set mode watch</code>, or ask your agent to. The CLI and every MCP app read the same settings. <code>BX_MODE</code>, <code>BX_PACE</code> and <code>BX_TYPING</code> override them for one process, and what an agent asks for in <code>start</code> wins for its task.</p>
       </div>
       <div class="installer" data-set="modes"></div>
     </div>
@@ -495,7 +494,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
     <div class="trust">
       <div><h3>Your session is the point</h3><p>The agent can read any page and act on any site you're signed in to in that profile. Asking before risky actions is its judgment, not a hard limit.</p></div>
       <div><h3>Fence it with a profile</h3><p>Point it at a separate profile, or the <code>launch</code> browser with its own logins, for anything it shouldn't touch.</p></div>
-      <div><h3>See what it does</h3><p>bx works in tabs in front of you, and a "bx" pointer shows every action as it happens. Set <code>BX_MODE=watch</code> to slow it to human pace.</p></div>
+      <div><h3>See what it does</h3><p>A "bx" pointer shows every action as it happens. Say "show me" and the tab bx works in comes to the front; ask for human pace to slow it down.</p></div>
     </div>
   </section>
 
@@ -521,7 +520,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
    - Claude Desktop or Cursor, as an MCP server: npx -y @facets-cloud/bx mcp install
 2. Ask which browser I use, and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
 3. If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
-4. Ask whether I want bx at human pace. Fast mode is the default: a "bx" pointer shows each action, with no pacing. Watch mode slows it to human pace; for it, set BX_MODE=watch in the environment the app starts with (for Claude Code or Codex, export it in my shell profile). If a site ignores pasted text, BX_TYPING=keys makes bx type key by key.
+4. Tell me how bx works by default: full speed, with the browser left where it is. I can say "show me" to bring the browser to the front, or "at human pace" to slow it down, for any task. To change the defaults, run: npx -y @facets-cloud/bx config set mode watch (or pace human).
 5. Tell me to restart this app, then run the bx doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
   const TABS = [
     ["Claude Code", "claude plugin marketplace add Facets-cloud/bx\nclaude plugin install bx@bx", "The plugin brings the MCP server and the skill, and keeps them updated. Restart Claude Code, turn on remote debugging, click Allow once."],
@@ -530,10 +529,10 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
     ["Ask your agent", PROMPT, "Paste this into any agent. It installs bx and walks you through the rest."],
   ];
   const MODE_TABS = [
-    ["Claude Code / Codex", "export BX_MODE=watch     # in your shell profile\nexport BX_TYPING=keys    # optional", "The plugin's MCP server reads the environment the app starts with. Restart Claude Code or Codex after."],
-    ["Cursor / Desktop", '{ "mcpServers": { "bx": {\n  "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"],\n  "env": { "BX_MODE": "watch" } } } }', "The bx entry in ~/.cursor/mcp.json or claude_desktop_config.json."],
-    ["CLI", "export BX_MODE=watch        # in your shell profile\nBX_MODE=watch bx batch $id --file steps.json   # or for one command", "The CLI and the agent skill read your shell's environment."],
+    ["Settings", "npx -y @facets-cloud/bx config set mode watch    # browser to the front by default\nnpx -y @facets-cloud/bx config set pace human    # human pace by default", "One settings file for the CLI and every MCP app; no restart needed. Or ask your agent: \"make watch my default\"."],
+    ["One command", "BX_PACE=human bx batch $id --file steps.json", "BX_MODE, BX_PACE and BX_TYPING override the settings for one process."],
   ];
+
   document.querySelectorAll(".installer").forEach((box) => {
     const TABS_ = box.dataset.set === "modes" ? MODE_TABS : TABS, ask = TABS_ === TABS ? 3 : -1;
     box.innerHTML = '<div class="tabs" role="tablist"></div><div class="body"><pre></pre><button class="btn" type="button">Copy</button></div><div class="hint"></div>';

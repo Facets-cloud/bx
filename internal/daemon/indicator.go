@@ -285,7 +285,7 @@ const removeIndicatorJS = `document.querySelectorAll("bx-indicator").forEach(e =
 // empty, nothing; for typing and keys pass focusedJS) into view, then shows
 // verb on the page and glides the pointer to it. In
 // both modes the pointer is shown, so a person can always see what bx is
-// doing. In watch mode the glide takes 250-650ms and the real mouse travels
+// doing. At human pace the glide takes 250-650ms and the real mouse travels
 // the same path; in fast mode the pointer hops in 120ms and ok is false, so
 // the action itself runs without human pacing. It returns once the pointer
 // has arrived. It is best effort: a page that refuses it still gets the action.
@@ -364,7 +364,7 @@ const selectMenuJS = `((el, v) => {
 	return [x, y, ms];
 })(%s, %s)`
 
-// showSelect plays the select menu for e choosing value, in watch mode:
+// showSelect plays the select menu for e choosing value, at human pace:
 // the pointer clicks the field, the options unfold, and the pointer moves
 // to the chosen one. It returns once the option is lit, best effort.
 func (sess *tabSession) showSelect(ctx context.Context, e elem, value string) {

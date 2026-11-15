@@ -59,7 +59,7 @@ bx fill <tab> <el> <value> [<el> <value> ...]
 bx type <tab> <text> [--into <el>] [--submit Enter]  # key by key
 bx key <tab> <key>                        # Enter, Escape, Tab, ArrowDown, Meta+a
 bx batch <tab> '<json steps>' | --file <f> # several actions in one call
-bx start "<title>" [--mode watch] [--typing keys]  # begin a task; the pointer shows the title
+bx start "<title>" [--mode watch] [--pace human] [--typing keys]  # begin a task; the pointer shows the title
 bx done ["<summary>"]                     # once, when finished; lists the tabs the task opened
 bx upload <tab> <el> <file> [<file> ...]
 bx download <tab> <el> [--out <dir>] [--name <file>]  # click a download, wait for the
@@ -152,9 +152,7 @@ tab it touches focused in the background, so the tab need not be in front.
 
 On macOS, use Meta for shortcuts: `bx key <tab> Meta+a` selects all.
 
-bx has two modes, set in the environment of the agent or MCP server and
-sent with every request. Both open new tabs in front, scroll what they
-act on into view, and show a pointer with a "bx" tag that says what bx is
+bx opens new tabs in front, scrolls what it acts on into view, and shows a pointer with a "bx" tag that says what bx is
 doing (clicking, filling, pasting, reading the page, running a script,
 waiting, taking a screenshot) and, in a batch, which step it is on
 ("3/32 · Click "Next""). Between your calls it says "Waiting for the agent...", so
@@ -183,18 +181,30 @@ fill or choose (values are never logged), then go through its pages in
 order: snapshot each and run its steps, in one batch where you can. If a
 page changed, do what the step meant rather than failing.
 
-- Fast mode, the default: the pointer hops to each element and there is
-  no pacing.
-- `BX_MODE=watch`, for a person following along: the pointer glides and
-  the real mouse travels with it, clicks land near the middle, a native
-  dropdown is shown unfolding to the choice, and batch steps pause
-  briefly.
+How bx works for a task is two choices, which you make with `start` from
+what the user says. Leave out what they didn't ask for: their settings
+(`bx config`) then apply, full speed in the background unless they changed it.
+
+- Mode: `fast` leaves the browser where it is, so the user can keep
+  working. `watch` brings the tab you work in to the front, and follows
+  you from tab to tab and profile to profile. Use watch when the user wants
+  to see it: "show me", "let me watch", "in front of me", "bring it up".
+  Use fast when they say "in the background", "don't disturb me".
+- Pace: `full` acts at once. `human` makes the pointer glide with the real
+  mouse, clicks land near the middle, a native dropdown is shown unfolding,
+  and batch steps pause. Use it only when the user asks to slow down: "at
+  human pace", "slowly", "step by step". Mode and pace are separate: "show
+  me" is watch at full pace.
 
 Text is pasted in one go by default (the page gets the same events as a
-paste). `BX_TYPING=keys` types key by key instead, at human pace in watch
-mode, for sites that only react to key presses.
+paste). `--typing keys` (or the `typing` setting) types key by key, for the
+rare site that only reacts to key presses.
 
-Both modes use the same browser and logins, and all input arrives as real
+To change the user's defaults for every task, when they ask for that, use
+`bx config set mode watch` (MCP: `settings`). BX_MODE, BX_PACE and BX_TYPING
+in the environment override the settings for one process.
+
+Every mode uses the same browser and logins, and all input arrives as real
 (trusted) events. Screenshots and snapshots leave the overlay out.
 
 ## Dialogs
@@ -258,5 +268,5 @@ If clicks time out on a tab where the user has a DevTools window open,
 ask them to close DevTools on that tab (or resume it if it is paused in
 the debugger); bx reads console and network without it.
 
-To let the user watch, set `BX_FOLLOW=1`: every tab bx opens or acts in
-is brought to the front of its window.
+To let the user watch, start the task with `--mode watch`: every tab bx
+opens or acts in is brought to the front when bx moves to it.
