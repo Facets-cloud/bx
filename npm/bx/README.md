@@ -81,7 +81,7 @@ bx can't connect until it's switched on again.
 | --- | --- |
 | Setup | `doctor`, `list_browsers`, `setup`, `launch` |
 | Read | `list_profiles`, `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait` |
-| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `dialog`, `close_tab` |
+| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `dialog`, `close_tab` |
 | Debug | `console`, `network`, `storage`, `performance`, `emulate`, `cdp` |
 
 A typical run: `list_profiles`, then `open` a URL in a profile, then

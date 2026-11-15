@@ -178,7 +178,7 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 			return a["url"]
 		}
 		return cleanURL(a["url"])
-	case "click", "hover", "read", "screenshot":
+	case "click", "hover", "read", "screenshot", "download":
 		return named(a["selector"], names)
 	case "wait":
 		if a["text"] != "" {

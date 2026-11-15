@@ -245,6 +245,9 @@ func (s *server) dispatch(req Request) (any, error) {
 	case BatchResult:
 		r.Changes = s.changes(a["tab"])
 		return r, nil
+	case Downloaded:
+		r.Changes = s.changes(a["tab"])
+		return r, nil
 	}
 	return res, nil
 }
@@ -287,6 +290,8 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 			return nil, exit.New(exit.Validation, "upload: bad file list")
 		}
 		return s.upload(id, a["selector"], files, t)
+	case "download":
+		return s.download(id, a["selector"], a["dir"], a["name"], t)
 	case "dialog":
 		return s.dialog(id, a["action"] == "accept", a["text"])
 	case "front":

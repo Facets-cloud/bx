@@ -30,6 +30,10 @@ action as something the user did with their own hands.
   when the user set it up or asks for it.
 - Ask before submitting forms, sending messages, buying, deleting or
   changing settings on the user's behalf. Reading is fine.
+- When a page asks for something you don't have, such as an address, a tax
+  ID, a phone number, a sign-in or a code, stop and ask the user for it.
+  Never make up their details. Once they give them, fill them in and go on:
+  giving them is their go-ahead for that form.
 - `bx close tab` needs `--yes`. Close only tabs you opened.
 
 ## Commands
@@ -58,6 +62,8 @@ bx batch <tab> '<json steps>' | --file <f> # several actions in one call
 bx start "<title>" [--mode watch] [--typing keys]  # begin a task; the pointer shows the title
 bx done ["<summary>"]                     # once, when finished; lists the tabs the task opened
 bx upload <tab> <el> <file> [<file> ...]
+bx download <tab> <el> [--out <dir>] [--name <file>]  # click a download, wait for the
+                                          # file; prints its path. Default ~/Downloads
 bx dialog <tab> accept|dismiss [--text <reply>]
 bx front <tab>
 bx close tab <id> --yes

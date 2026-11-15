@@ -72,6 +72,9 @@ Act (each waits for the page to settle and reports navigation, new tabs, dialogs
                                                    {"action":"key","key":"Enter"}]; stops at the
                                                   first failure
   bx upload <tab> <el> <file> [<file> ...]
+  bx download <tab> <el> [--out <dir>] [--name <file>]
+                                    click a download and wait for the file;
+                                    default ~/Downloads, never overwrites
   bx dialog <tab> accept|dismiss [--text <reply>]
   bx front <tab>
   bx close tab <id> --yes
@@ -203,6 +206,7 @@ var commands = map[string]func(e env) error{
 	"type":          cmdType,
 	"key":           cmdKey,
 	"upload":        cmdUpload,
+	"download":      cmdDownload,
 	"dialog":        cmdDialog,
 	"front":         cmdFront,
 	"status":        cmdStatus,

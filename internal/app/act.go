@@ -106,6 +106,27 @@ func cmdUpload(e env) error {
 	return actCall(e, "upload", map[string]string{"tab": e.pos[0], "selector": e.pos[1], "files": string(b)}, "uploaded")
 }
 
+func cmdDownload(e env) error {
+	if err := need(e.pos, 2, "bx download <tab> <element> [--out <dir>] [--name <file>]"); err != nil {
+		return err
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	var r daemon.Downloaded
+	if err := e.call("download", map[string]string{"tab": e.pos[0], "selector": e.pos[1],
+		"dir": e.a.flags["out"], "name": e.a.flags["name"], "timeout": t}, &r); err != nil {
+		return err
+	}
+	if e.o.json {
+		e.o.printJSON(r)
+		return nil
+	}
+	printAct(e.o, r.ActResult, fmt.Sprintf("saved %s (%d bytes)", r.File, r.Bytes))
+	return nil
+}
+
 func cmdGoto(e env) error {
 	if err := need(e.pos, 2, "bx goto <tab> <url|back|forward|reload>"); err != nil {
 		return err

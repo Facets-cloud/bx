@@ -223,14 +223,14 @@ server entry.
 
 ## Tools
 
-34 tools.
+35 tools.
 
 | Group | Tools |
 | --- | --- |
 | Session | `start` (title, mode, typing), `done` (summary; returns time taken, action count and the tabs it opened) |
 | Setup | `doctor`, `list_browsers`, `setup`, `launch`, `settings` |
 | Read | `list_profiles`, `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait` |
-| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `dialog`, `close_tab`, `batch` |
+| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `dialog`, `close_tab`, `batch` |
 | Debug | `console`, `network`, `storage`, `performance`, `emulate`, `cdp` |
 | Audit log | `history`, `pins` |
 

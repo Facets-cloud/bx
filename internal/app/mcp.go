@@ -478,6 +478,11 @@ func actTools() []mcpTool {
 				"type": "array", "items": map[string]any{"type": "string"}, "description": "Absolute file paths."}},
 				[]string{"tab", "element", "files"}),
 			run: uploadTool},
+		opTool("download", "Click a link or button that downloads a file, and wait until it is saved. "+
+			"Returns the file's path and size. Use it, not click, for downloads: clicked downloads can be dropped.", "download",
+			map[string]any{"tab": tab, "element": el, "dir": str("Folder to save in. Default: ~/Downloads."),
+				"name": str("File name to save as. Default: the name the site gives. An existing file is never replaced.")},
+			[]string{"tab", "element"}, map[string]string{"tab": "tab", "element": "selector", "dir": "dir", "name": "name"}),
 		opTool("dialog", "Accept or dismiss the alert, confirm or prompt open on the tab.", "dialog",
 			map[string]any{"tab": tab, "action": map[string]any{"type": "string", "enum": []string{"accept", "dismiss"}},
 				"text": str("Reply for a prompt.")}, []string{"tab", "action"},

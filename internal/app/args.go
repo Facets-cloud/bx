@@ -14,7 +14,7 @@ var valueFlags = map[string]string{
 	"--browser": "browser", "--profile": "profile",
 	"--selector": "selector", "--format": "format",
 	"--out": "out", "--tab": "tab", "--timeout": "timeout", "--within": "within", "--into": "into", "--blur": "blur", "--mode": "mode", "--typing": "typing",
-	"--text": "text", "--submit": "submit", "--file": "file",
+	"--text": "text", "--submit": "submit", "--file": "file", "--name": "name",
 	"--since": "since", "--limit": "limit", "--task": "task", "--request": "request",
 	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",
 }
