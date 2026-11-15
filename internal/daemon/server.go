@@ -292,6 +292,18 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.upload(id, a["selector"], files, t)
 	case "download":
 		return s.download(id, a["selector"], a["dir"], a["name"], t)
+	case "pdf":
+		return s.pdf(id, a["dir"], a["name"], t)
+	case "mouse":
+		o, err := parseMouse(a)
+		if err != nil {
+			return nil, err
+		}
+		return s.mouse(id, o, t)
+	case "storage-change":
+		return s.changeStorage(id, StorageChange{Action: a["action"], Area: a["area"], Name: a["name"], Value: a["value"]}, t)
+	case "mock":
+		return s.mock(id, a, a["remove"] == "true")
 	case "dialog":
 		return s.dialog(id, a["action"] == "accept", a["text"])
 	case "front":
@@ -431,6 +443,7 @@ func (sess *tabSession) narrate(op string, a map[string]string) {
 	msg := map[string]string{
 		"read": "Read the page", "eval": "Run a script on the page", "console": "Check the console",
 		"network": "Check network requests", "storage": "Read cookies and storage",
+		"storage-change": "Ask you to allow a storage change", "mock": "Change mocked requests",
 		"performance": "Measure performance", "emulate": "Change how the page is shown",
 	}[op]
 	switch {

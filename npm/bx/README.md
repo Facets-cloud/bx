@@ -81,8 +81,8 @@ bx can't connect until it's switched on again.
 | --- | --- |
 | Setup | `doctor`, `list_browsers`, `setup`, `launch` |
 | Read | `list_profiles`, `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait` |
-| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `dialog`, `close_tab` |
-| Debug | `console`, `network`, `storage`, `performance`, `emulate`, `cdp` |
+| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `pdf`, `mouse`, `dialog`, `close_tab` |
+| Debug | `console`, `network`, `storage`, `change_storage`, `mock`, `performance`, `emulate`, `cdp` |
 
 A typical run: `list_profiles`, then `open` a URL in a profile, then
 `snapshot` the tab. The snapshot gives every element a ref like `e12`,

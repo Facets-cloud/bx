@@ -52,6 +52,12 @@ logged before that are included):
                                     requests with status and timing (default: last 50)
   bx network <tab> --request <id>   one request's headers and bodies
   bx storage <tab>                  cookies, localStorage and sessionStorage
+  bx storage <tab> set|delete|clear cookies|local|session [<name> [<value>]]
+                                    change them on the tab's site; you Allow each
+                                    change in a dialog first
+  bx mock <tab> <url-pattern> [--status <n>] [--body <text>] [--type <content-type>]
+                                    answer matching requests with a made-up response
+  bx mock <tab> --remove [<url-pattern>]   remove one mock, or all
   bx performance <tab> [--reload]   Core Web Vitals, slow resources, long frames
   bx emulate <tab> [--viewport 390x844[@3][,mobile]] [--network offline|slow-3g|fast-3g]
                    [--cpu <slowdown>] [--geo <lat>,<lon>] [--color dark|light] [--reset]
@@ -75,6 +81,9 @@ Act (each waits for the page to settle and reports navigation, new tabs, dialogs
   bx download <tab> <el> [--out <dir>] [--name <file>]
                                     click a download and wait for the file;
                                     default ~/Downloads, never overwrites
+  bx pdf <tab> [--out <dir>] [--name <file>]   save the page as a PDF
+  bx mouse <tab> click|double|right|move|wheel <x> <y> [<dx> <dy>]
+                                    act at a point, in screenshot pixels
   bx dialog <tab> accept|dismiss [--text <reply>]
   bx front <tab>
   bx close tab <id> --yes
@@ -207,6 +216,9 @@ var commands = map[string]func(e env) error{
 	"key":           cmdKey,
 	"upload":        cmdUpload,
 	"download":      cmdDownload,
+	"pdf":           cmdPDF,
+	"mouse":         cmdMouse,
+	"mock":          cmdMock,
 	"dialog":        cmdDialog,
 	"front":         cmdFront,
 	"status":        cmdStatus,

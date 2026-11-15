@@ -223,15 +223,15 @@ server entry.
 
 ## Tools
 
-35 tools.
+39 tools.
 
 | Group | Tools |
 | --- | --- |
 | Session | `start` (title, mode, typing), `done` (summary; returns time taken, action count and the tabs it opened) |
 | Setup | `doctor`, `list_browsers`, `setup`, `launch`, `settings` |
 | Read | `list_profiles`, `list_tabs`, `snapshot`, `read`, `screenshot`, `eval`, `wait` |
-| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `dialog`, `close_tab`, `batch` |
-| Debug | `console`, `network`, `storage`, `performance`, `emulate`, `cdp` |
+| Act | `open`, `goto`, `click`, `hover`, `drag`, `fill`, `type`, `key`, `upload`, `download`, `pdf`, `mouse`, `dialog`, `close_tab`, `batch` |
+| Debug | `console`, `network`, `storage`, `change_storage`, `mock`, `performance`, `emulate`, `cdp` |
 | Audit log | `history`, `pins` |
 
 - `open` takes a URL and an optional profile (default: the one you last
@@ -239,6 +239,20 @@ server entry.
 - `batch` runs `click`, `fill`, `type`, `key`, `hover`, `goto`, `wait`,
   `upload` and `scroll` steps in one call. It stops at the first failure and
   says which step failed.
+- `download` clicks a link or button and waits for the file to be saved,
+  in `~/Downloads` or a folder you name, and never overwrites a file. If
+  the click opens a form instead (a billing address, a sign-in), it says
+  which fields are empty, so the agent can ask you for them.
+- `pdf` saves the page as a PDF, for order and receipt pages that have no
+  download of their own.
+- `mouse` clicks, scrolls or moves at a point of a screenshot, for what has
+  no element to name: a canvas, a map, a chart, a spreadsheet grid.
+- `mock` answers a tab's requests to matching URLs with a made-up
+  response, to see how a page handles an error. It lasts until removed,
+  the tab closes or bx stops.
+- `change_storage` sets, deletes or clears a cookie or storage item of the
+  tab's site. bx shows you a macOS dialog for each change and goes ahead
+  only if you click Allow.
 - `console` and `network` take `since` (the last id seen), so an agent sees
   only what an action caused; `network` with `request` returns that
   request's headers and bodies.
@@ -275,6 +289,9 @@ What limits it:
   forms, sending messages, buying or deleting, and before accepting a
   confirm dialog that deletes or sends. bx itself doesn't block those
   clicks, so the rule depends on the agent following it.
+- **You allow each storage change.** `change_storage` touches your logins,
+  so bx itself shows a macOS dialog, outside the browser, for every change.
+  Deny is the default, and no answer within a minute counts as Deny.
 - **Fence it with a profile.** Point agents at a profile that holds only the
   logins the task needs.
 - **Page text is data.** A page can try to tell an agent to act in another

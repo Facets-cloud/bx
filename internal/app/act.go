@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Facets-cloud/bx/internal/daemon"
@@ -124,6 +125,65 @@ func cmdDownload(e env) error {
 		return nil
 	}
 	printAct(e.o, r.ActResult, fmt.Sprintf("saved %s (%d bytes)", r.File, r.Bytes))
+	return nil
+}
+
+func cmdPDF(e env) error {
+	if err := need(e.pos, 1, "bx pdf <tab> [--out <dir>] [--name <file>]"); err != nil {
+		return err
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	var r daemon.Saved
+	if err := e.call("pdf", map[string]string{"tab": e.pos[0], "dir": e.a.flags["out"], "name": e.a.flags["name"], "timeout": t}, &r); err != nil {
+		return err
+	}
+	if e.o.json {
+		e.o.printJSON(r)
+	} else if !e.o.quiet {
+		fmt.Fprintf(e.o.w, "saved %s (%d bytes)\n", r.File, r.Bytes)
+	}
+	return nil
+}
+
+func cmdMouse(e env) error {
+	usage := "bx mouse <tab> click|double|right|move|wheel <x> <y> [<dx> <dy>]  (screenshot pixels)"
+	if len(e.pos) != 4 && len(e.pos) != 6 {
+		return exit.New(exit.Validation, "usage: %s", usage)
+	}
+	a := map[string]string{"tab": e.pos[0], "action": e.pos[1], "x": e.pos[2], "y": e.pos[3]}
+	if len(e.pos) == 6 {
+		a["dx"], a["dy"] = e.pos[4], e.pos[5]
+	}
+	return actCall(e, "mouse", a, e.pos[1]+" at "+e.pos[2]+","+e.pos[3])
+}
+
+func cmdMock(e env) error {
+	if len(e.pos) < 1 || len(e.pos) > 2 {
+		return exit.New(exit.Validation, "usage: bx mock <tab> <url-pattern> [--status <n>] [--body <text>] [--type <content-type>] | --remove [<url-pattern>]")
+	}
+	a := map[string]string{"tab": e.pos[0], "status": e.a.flags["status"], "body": e.a.flags["body"],
+		"content_type": e.a.flags["type"], "remove": strconv.FormatBool(e.a.flags["remove"] == "true")}
+	if len(e.pos) > 1 {
+		a["url"] = e.pos[1]
+	}
+	var r daemon.Mocks
+	if err := e.call("mock", a, &r); err != nil {
+		return err
+	}
+	switch {
+	case e.o.json:
+		e.o.printJSON(r)
+	case e.o.quiet:
+	case len(r.Mocks) == 0:
+		fmt.Fprintln(e.o.w, "no mocks on this tab")
+	default:
+		for _, m := range r.Mocks {
+			fmt.Fprintf(e.o.w, "%s -> %d %s\n", m.URL, m.Status, m.ContentType)
+		}
+	}
 	return nil
 }
 

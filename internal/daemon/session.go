@@ -51,6 +51,8 @@ type tabSession struct {
 	clicked   atomic.Int64 // unix nanoseconds of the last click on the tab, see paste
 
 	log *devLog // console and network activity, from the moment bx attached
+
+	mocks tabMocks // made-up responses for matching requests, see mock
 }
 
 // Dialog is a JavaScript alert, confirm, prompt or beforeunload dialog.

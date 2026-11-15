@@ -131,8 +131,41 @@ func firstLine(s string) string {
 }
 
 // cmdStorage prints the cookies and web storage the tab's page sees.
+// cmdStorageChange is bx storage <tab> set|delete|clear <area> [<name> [<value>]].
+// bx shows the user a dialog, and changes nothing unless they Allow it.
+func cmdStorageChange(e env) error {
+	if len(e.pos) < 3 {
+		return exit.New(exit.Validation, "usage: bx storage <tab> set|delete|clear cookies|local|session [<name> [<value>]]")
+	}
+	a := map[string]string{"tab": e.pos[0], "action": e.pos[1], "area": e.pos[2]}
+	if len(e.pos) > 3 {
+		a["name"] = e.pos[3]
+	}
+	if len(e.pos) > 4 {
+		a["value"] = e.pos[4]
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	a["timeout"] = t
+	var r daemon.Changed
+	if err := e.call("storage-change", a, &r); err != nil {
+		return err
+	}
+	if e.o.json {
+		e.o.printJSON(r)
+	} else if !e.o.quiet {
+		fmt.Fprintln(e.o.w, "done:", r.Changed)
+	}
+	return nil
+}
+
 func cmdStorage(e env) error {
-	if err := need(e.pos, 1, "bx storage <tab>"); err != nil {
+	if len(e.pos) > 1 {
+		return cmdStorageChange(e)
+	}
+	if err := need(e.pos, 1, "bx storage <tab> [set|delete|clear cookies|local|session [<name> [<value>]]]"); err != nil {
 		return err
 	}
 	t, err := e.a.timeout()

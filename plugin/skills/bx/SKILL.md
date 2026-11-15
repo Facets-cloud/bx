@@ -64,6 +64,9 @@ bx done ["<summary>"]                     # once, when finished; lists the tabs 
 bx upload <tab> <el> <file> [<file> ...]
 bx download <tab> <el> [--out <dir>] [--name <file>]  # click a download, wait for the
                                           # file; prints its path. Default ~/Downloads
+bx pdf <tab> [--out <dir>] [--name <file>]  # save the page as a PDF (receipts with no download)
+bx mouse <tab> click|double|right|move|wheel <x> <y> [<dx> <dy>]  # at a point, in
+                                          # screenshot pixels: canvas, maps, grids
 bx dialog <tab> accept|dismiss [--text <reply>]
 bx front <tab>
 bx close tab <id> --yes
@@ -72,6 +75,11 @@ bx console <tab> [--errors] [--since <id>] [--limit <n>]   # console, exceptions
 bx network <tab> [--errors] [--since <id>] [--limit <n>]   # requests: status, type, time
 bx network <tab> --request <id>           # one request's headers and bodies
 bx storage <tab>                          # cookies, localStorage, sessionStorage
+bx storage <tab> set|delete|clear cookies|local|session [<name> [<value>]]
+                                          # the user must Allow it in a dialog; tell
+                                          # them what and why first
+bx mock <tab> <url-pattern> [--status <n>] [--body <text>] [--type <ct>]
+bx mock <tab> --remove [<url-pattern>]    # mocks last until removed or bx stop
 bx performance <tab> [--reload]           # Web Vitals, long frames, slow resources
 bx emulate <tab> [--viewport 390x844@3,mobile] [--network offline|slow-3g|fast-3g]
           [--cpu 4] [--geo <lat>,<lon>] [--color dark|light] [--reset]
