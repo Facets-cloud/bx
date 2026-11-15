@@ -116,12 +116,14 @@ const pointerUIJS = `((last) => {
 
 	let [cx, cy] = last || [innerWidth / 2, innerHeight / 2];
 	let frame = 0;
-	// The tag keeps inside the page: near the right edge it slides left, under
-	// the pointer, and a status wider than the page wraps.
+	// The tag keeps inside the page: when it doesn't fit right of the pointer
+	// it flips to the left, its pointed corner toward the arrow, and a status
+	// wider than the page wraps.
 	let tagW = 0;
 	const place = () => {
-		const over = cx + 16 + tagW - (innerWidth - 8);
-		tag.style.left = (over > 0 ? Math.max(16 - over, 8 - cx) : 16) + "px";
+		const flip = cx + 16 + tagW > innerWidth - 8;
+		tag.style.left = (flip ? Math.max(-tagW - 2, 8 - cx) : 16) + "px";
+		tag.style.borderRadius = flip ? "10px 4px 10px 10px" : "4px 10px 10px 10px";
 	};
 	const measure = () => {
 		const shown = text.style.opacity === "1", room = Math.max(0, Math.min(360, innerWidth - 64));
@@ -130,7 +132,7 @@ const pointerUIJS = `((last) => {
 		if (shown) text.style.maxWidth = room + "px";
 		// A status too long for one line wraps, up to three lines.
 		Object.assign(text.style, wrap ? {whiteSpace: "normal", lineHeight: "1.3", maxHeight: "3.9em"} : {lineHeight: "", maxHeight: ""});
-		tag.style.alignItems = wrap ? "flex-start" : "center";
+		tag.style.alignItems = wrap ? "baseline" : "center";
 		tagW = badge.offsetWidth + 18 + (shown ? 6 + Math.min(natural, room) : 0);
 		place();
 	};
