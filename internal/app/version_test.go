@@ -34,8 +34,7 @@ func TestNewer(t *testing.T) {
 }
 
 func TestMaybeRefreshSkill(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := testHome(t)
 	claude := filepath.Join(home, ".claude", "skills", "bx")
 	if err := os.MkdirAll(claude, 0o755); err != nil {
 		t.Fatal(err)
@@ -72,7 +71,7 @@ func TestMaybeRefreshSkill(t *testing.T) {
 }
 
 func TestCachedLatestUsesFreshCache(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	path, err := cachePath()
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +86,7 @@ func TestCachedLatestUsesFreshCache(t *testing.T) {
 }
 
 func TestChooseBrowserOrder(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	t.Setenv("BX_BROWSER", "")
 	if err := daemon.SaveConfig(daemon.Config{Browser: "chrome"}); err != nil {
 		t.Fatal(err)
@@ -109,8 +108,7 @@ func TestChooseBrowserOrder(t *testing.T) {
 }
 
 func TestSkillSkipsClaudeWithThePlugin(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := testHome(t)
 	os.MkdirAll(filepath.Join(home, ".claude", "plugins"), 0o755)
 	os.MkdirAll(filepath.Join(home, ".codex"), 0o755)
 	if got := skillTargets(); len(got) != 2 {

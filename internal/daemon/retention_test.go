@@ -23,7 +23,7 @@ func writeLog(t *testing.T, dir, name string, n int, mod time.Time) string {
 }
 
 func TestTidyGzipsThenDeletesOldest(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	dir, _ := sessionsDir()
 	os.MkdirAll(dir, 0o700)
 	now := time.Now()

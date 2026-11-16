@@ -9,7 +9,7 @@ import (
 )
 
 func TestPinRoundTripAndRecipe(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	t0 := time.Now()
 	es := []daemon.Entry{
 		{T: t0, Op: "start", Target: "Onboard Lumen"},
