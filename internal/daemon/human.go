@@ -51,6 +51,13 @@ func (sess *tabSession) moveMouse(ctx context.Context, x, y float64, d time.Dura
 	}
 }
 
+// held marks the left button as down during a press or a move (buttons=1).
+// chromedp sets only which button changed; the browser sends a mouse event
+// into an out-of-process frame, such as a sandboxed iframe, by the buttons
+// held, and loses the press or the release without it. Pages that check
+// e.buttons while dragging need it too.
+func held(p *input.DispatchMouseEventParams) { p.Buttons = 1 }
+
 // ease is ease-in-out cubic, as the pointer's glide uses.
 func ease(t float64) float64 {
 	if t < .5 {
@@ -60,11 +67,16 @@ func ease(t float64) float64 {
 }
 
 // press clicks e: at human pace by moving the mouse there and pressing and
-// releasing with a short hold, otherwise with chromedp's instant click.
+// releasing with a short hold, otherwise with chromedp's instant click. An
+// element in a frame is clicked through the frame's own target, in its
+// coordinates.
 func (sess *tabSession) press(ctx context.Context, e elem, verb string, double bool) error {
 	sess.clicked.Store(time.Now().UnixNano())
-	x, y, ok := sess.indicate(ctx, verb, e.js)
+	x, y, ok := sess.indicateEl(ctx, verb, e)
 	if !ok {
+		if e.fr != nil {
+			return clickIn(ctx, e, double)
+		}
 		a := chromedp.Click(e.q())
 		if double {
 			a = chromedp.DoubleClick(e.q())
@@ -72,12 +84,16 @@ func (sess *tabSession) press(ctx context.Context, e elem, verb string, double b
 		_, err := chromedp.Run(ctx, a)
 		return err
 	}
+	if e.fr != nil {
+		x, y = x-e.fr.ox, y-e.fr.oy
+	}
+	ctx = e.on(ctx)
 	clicks := 1
 	if double {
 		clicks = 2
 	}
 	for c := 1; c <= clicks; c++ {
-		if _, err := chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x, y, chromedp.ButtonLeft, chromedp.ClickCount(c))); err != nil {
+		if _, err := chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x, y, chromedp.ButtonLeft, held, chromedp.ClickCount(c))); err != nil {
 			return err
 		}
 		time.Sleep(between(50*time.Millisecond, 110*time.Millisecond))
@@ -123,6 +139,12 @@ func (sess *tabSession) enter(ctx context.Context, text string) error {
 // counts as the agent pointing at it, for paste's fallback.
 func (sess *tabSession) focusOrClick(ctx context.Context, e elem) error {
 	sess.clicked.Store(time.Now().UnixNano())
+	if e.fr != nil {
+		if in, err := evalEl[bool](ctx, e, fmt.Sprintf(`(e => { e.focus(); return %s; })(%s)`, fmt.Sprintf(holdsFocusJS, "e"), e.js)); err == nil && in {
+			return nil
+		}
+		return clickIn(ctx, e, false)
+	}
 	if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err == nil {
 		in, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(holdsFocusJS, e.js)))
 		if err == nil && in {

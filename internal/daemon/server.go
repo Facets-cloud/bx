@@ -264,7 +264,7 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 	case "screenshot":
 		return s.screenshot(id, a["selector"], a["full"] == "true", t)
 	case "eval":
-		return s.eval(id, a["script"], t)
+		return s.eval(id, a["script"], a["frame"], t)
 	case "wait":
 		return s.wait(id, a["text"], a["selector"], a["gone"] == "true", t)
 	case "click":

@@ -92,6 +92,11 @@ An `<el>` is a ref from the tab's latest `bx snapshot` (such as `e12`), a
 role and name exactly as a snapshot line shows them (`'button "Next"'`,
 `'textbox "Name" #2'` for the second match), or a CSS selector. A role and
 name waits up to 10s for the element to appear. `--timeout <dur>` (default 30s) bounds waits.
+A snapshot also shows what is inside iframes (an embedded editor, a
+document viewer, a payment form), indented under their `Iframe` line.
+Refs, role and name, and CSS selectors reach in there; a CSS selector looks
+in the tab's own page first. To run a script inside a frame, pass the
+`Iframe` line's ref: `bx eval <tab> '<js>' --frame e15`.
 
 ## How to work a page
 

@@ -65,7 +65,13 @@ func (s *server) mouse(id string, o MouseOptions, timeout time.Duration) (ActRes
 		sess.point(ctx, x, y)
 		sess.say(ctx, mouseVerb(o.Action))
 		sess.clicked.Store(time.Now().UnixNano())
-		if err := dispatchMouse(ctx, sess, o, x, y, dpr); err != nil {
+		// A point inside a frame that runs in its own process goes to the
+		// frame's own target, in its coordinates (see frame).
+		t, tx, ty := sess.t, x, y
+		if f, fx, fy := sess.frameAt(ctx, x, y); f != nil {
+			t, tx, ty = f.t, fx, fy
+		}
+		if err := dispatchMouse(ctx, t, o, tx, ty, dpr); err != nil {
 			return upstream(fmt.Sprintf("mouse %s at %g,%g", o.Action, o.X, o.Y), err)
 		}
 		return nil
@@ -87,11 +93,11 @@ func mouseVerb(action string) string {
 }
 
 // dispatchMouse sends the input events for one mouse action at x, y (CSS
-// pixels).
-func dispatchMouse(ctx context.Context, sess *tabSession, o MouseOptions, x, y, dpr float64) error {
+// pixels) to target t: the tab, or a frame of it.
+func dispatchMouse(ctx context.Context, t *chromedp.Target, o MouseOptions, x, y, dpr float64) error {
 	ev := func(p input.DispatchMouseEventParams) error {
 		p.X, p.Y = x, y
-		_, err := cdp.Call(ctx, sess.t, input.DispatchMouseEvent, p)
+		_, err := cdp.Call(ctx, t, input.DispatchMouseEvent, p)
 		return err
 	}
 	if err := ev(input.DispatchMouseEventParams{Type: input.DispatchMouseEventTypeMouseMoved}); err != nil {
@@ -104,20 +110,22 @@ func dispatchMouse(ctx context.Context, sess *tabSession, o MouseOptions, x, y, 
 		// Sent raw: the browser needs deltaX and deltaY even when one is 0,
 		// which the typed params leave out.
 		p, _ := json.Marshal(map[string]any{"type": "mouseWheel", "x": x, "y": y, "deltaX": o.DX / dpr, "deltaY": o.DY / dpr})
-		return sess.t.Call(ctx, "Input.dispatchMouseEvent", json.RawMessage(p), nil)
+		return t.Call(ctx, "Input.dispatchMouseEvent", json.RawMessage(p), nil)
 	}
-	button, clicks := input.MouseButtonLeft, 1
+	// buttons is what is held while pressed (see held): 1 left, 2 right.
+	button, buttons, clicks := input.MouseButtonLeft, int64(1), 1
 	if o.Action == "right" {
-		button = input.MouseButtonRight
+		button, buttons = input.MouseButtonRight, 2
 	}
 	if o.Action == "double" {
 		clicks = 2
 	}
 	for c := 1; c <= clicks; c++ {
-		for _, t := range []input.DispatchMouseEventType{input.DispatchMouseEventTypeMousePressed, input.DispatchMouseEventTypeMouseReleased} {
-			if err := ev(input.DispatchMouseEventParams{Type: t, Button: button, ClickCount: int64(c)}); err != nil {
-				return err
-			}
+		if err := ev(input.DispatchMouseEventParams{Type: input.DispatchMouseEventTypeMousePressed, Button: button, Buttons: buttons, ClickCount: int64(c)}); err != nil {
+			return err
+		}
+		if err := ev(input.DispatchMouseEventParams{Type: input.DispatchMouseEventTypeMouseReleased, Button: button, ClickCount: int64(c)}); err != nil {
+			return err
 		}
 	}
 	return nil

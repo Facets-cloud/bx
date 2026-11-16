@@ -315,6 +315,21 @@ func (sess *tabSession) indicate(ctx context.Context, verb, js string) (x, y flo
 	return got[0], got[1], !fast
 }
 
+// indicateEl is indicate for an element, in the tab or in one of its
+// frames. For an element in a frame, x and y are on the tab's page; press
+// takes off e.fr's offset to get the frame's own coordinates.
+func (sess *tabSession) indicateEl(ctx context.Context, verb string, e elem) (x, y float64, ok bool) {
+	if e.fr == nil {
+		return sess.indicate(ctx, verb, e.js)
+	}
+	_, stand, err := sess.place(ctx, e)
+	if err != nil {
+		sess.say(ctx, verb)
+		return 0, 0, false
+	}
+	return sess.indicate(ctx, verb, stand)
+}
+
 // point moves the pointer to x, y at once, best effort.
 func (sess *tabSession) point(ctx context.Context, x, y float64) {
 	_, _ = chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(pointJS, x, y)))
@@ -368,6 +383,9 @@ const selectMenuJS = `((el, v) => {
 // the pointer clicks the field, the options unfold, and the pointer moves
 // to the chosen one. It returns once the option is lit, best effort.
 func (sess *tabSession) showSelect(ctx context.Context, e elem, value string) {
+	if e.fr != nil {
+		return // the menu is drawn on the tab's page, from the element there
+	}
 	if _, _, ok := sess.indicate(ctx, "Click", e.js); !ok {
 		return
 	}

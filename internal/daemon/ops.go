@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -250,7 +251,18 @@ func (s *server) read(id, el, format string, timeout time.Duration) (Content, er
 	if format == "html" {
 		a = chromedp.OuterHTML(e.q())
 	}
-	v, err := run(sess, timeout, a)
+	ctx, cancel := context.WithTimeout(sess.ctx, timeout)
+	defer cancel()
+	var v string
+	if e.fr != nil {
+		prop := "textContent"
+		if format == "html" {
+			prop = "outerHTML"
+		}
+		v, err = evalEl[string](ctx, e, fmt.Sprintf("(%s).%s", e.js, prop))
+	} else {
+		v, err = chromedp.Run(ctx, a)
+	}
 	return Content{Selector: el, Format: format, Content: v}, tabErr(err, "read", el, timeout)
 }
 
@@ -282,6 +294,18 @@ func (s *server) screenshot(id, el string, full bool, timeout time.Duration) (Im
 		e, err := sess.element(sess.ctx, el)
 		if err != nil {
 			return Image{}, err
+		}
+		if e.fr != nil {
+			// The frame's own target can't take a picture; the tab can,
+			// clipped to where the element shows on its page.
+			ctx, cancel := context.WithTimeout(sess.ctx, timeout)
+			defer cancel()
+			clip, err := sess.clipOf(ctx, e)
+			if err != nil {
+				return Image{}, tabErr(err, "screenshot", el, timeout)
+			}
+			a = clip
+			break
 		}
 		a = chromedp.Screenshot(e.q())
 	case full:
