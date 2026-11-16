@@ -76,8 +76,9 @@ bx network <tab> [--errors] [--since <id>] [--limit <n>]   # requests: status, t
 bx network <tab> --request <id>           # one request's headers and bodies
 bx storage <tab>                          # cookies, localStorage, sessionStorage
 bx storage <tab> set|delete|clear cookies|local|session [<name> [<value>]]
-                                          # the user must Allow it in a dialog; tell
-                                          # them what and why first
+                                          # the user must Allow it in a dialog (unless already
+                                          # remembered for browser+profile+site via Always allow);
+                                          # tell them what and why first. See bx consent.
 bx mock <tab> <url-pattern> [--status <n>] [--body <text>] [--type <ct>]
 bx mock <tab> --remove [<url-pattern>]    # mocks last until removed or bx stop
 bx performance <tab> [--reload]           # Web Vitals, long frames, slow resources

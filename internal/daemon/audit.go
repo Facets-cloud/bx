@@ -45,6 +45,7 @@ type Entry struct {
 	Op      string `json:"op"`
 	Target  string `json:"target,omitempty"`
 	Error   string `json:"error,omitempty"`
+	Auto    bool   `json:"auto,omitempty"` // the change skipped the dialog via a saved grant
 	MS      int64  `json:"ms"`
 }
 
@@ -87,6 +88,9 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 	if tab, ok := res.(Tab); ok { // open
 		e.Tab = string(tab.ID)
 	}
+	if ch, ok := res.(Changed); ok && ch.Auto {
+		e.Auto = true
+	}
 	s.auditMu.Lock()
 	defer s.auditMu.Unlock()
 	if e.Tab != "" {
@@ -96,6 +100,15 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 		e.URL, e.To = cleanURL(e.URL), cleanURL(e.To)
 	}
 	writeEntry(e)
+}
+
+// profileForTab is the profile folder of the tab, or "" if unknown.
+func (s *server) profileForTab(id string) string {
+	info, err := s.findTab(id)
+	if err != nil {
+		return ""
+	}
+	return s.tabInfo(info, s.profileNames()).Profile
 }
 
 // locate fills in the entry's profile and pages: the URL the tab had

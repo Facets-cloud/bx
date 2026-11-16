@@ -6,60 +6,53 @@ import (
 	"testing"
 )
 
-func TestSessionGrantNotDurable(t *testing.T) {
+func TestScopedToBrowserProfileSite(t *testing.T) {
 	dir := t.TempDir()
 	s := New(dir)
+	if err := s.Remember("edge", "Personal", "github.com"); err != nil {
+		t.Fatal(err)
+	}
+	if !New(dir).Remembered("edge", "Personal", "github.com") {
+		t.Fatal("grant did not survive a restart")
+	}
+	// Same site, different profile = not covered.
+	if New(dir).Remembered("edge", "Throwaway", "github.com") {
+		t.Fatal("grant leaked across profiles")
+	}
+	// Same site, different browser = not covered.
+	if New(dir).Remembered("brave", "Personal", "github.com") {
+		t.Fatal("grant leaked across browsers")
+	}
+}
 
-	if s.Remembered("github.com", CapStorage) {
-		t.Fatal("nothing granted yet, but Remembered returned true")
+func TestEmptyHostNeverRemembered(t *testing.T) {
+	dir := t.TempDir()
+	s := New(dir)
+	if err := s.Remember("edge", "Personal", ""); err != nil {
+		t.Fatal(err)
 	}
-	if err := s.Remember("github.com", CapStorage, ScopeSession); err != nil {
-		t.Fatalf("Remember session: %v", err)
-	}
-	if !s.Remembered("github.com", CapStorage) {
-		t.Fatal("session grant not remembered")
-	}
-	// A session grant must never touch disk.
 	if _, err := os.Stat(filepath.Join(dir, "consent.json")); !os.IsNotExist(err) {
-		t.Fatalf("session grant wrote consent.json; want no file (err=%v)", err)
+		t.Fatal("empty host wrote a grant")
 	}
-	// A fresh store (new daemon) must not see the old session grant.
-	if New(dir).Remembered("github.com", CapStorage) {
-		t.Fatal("session grant survived into a new store")
-	}
-}
-
-func TestAlwaysGrantIsDurable(t *testing.T) {
-	dir := t.TempDir()
-	if err := New(dir).Remember("example.com", CapStorage, ScopeAlways); err != nil {
-		t.Fatalf("Remember always: %v", err)
-	}
-	// A new store (daemon restart) must still see the always grant.
-	if !New(dir).Remembered("example.com", CapStorage) {
-		t.Fatal("always grant did not survive a restart")
-	}
-	// Scoping is per site: a different site is still unknown.
-	if New(dir).Remembered("evil.com", CapStorage) {
-		t.Fatal("grant for example.com leaked to evil.com")
+	if s.Remembered("edge", "Personal", "") {
+		t.Fatal("empty host reported remembered")
 	}
 }
 
-func TestForget(t *testing.T) {
+func TestForgetBySite(t *testing.T) {
 	dir := t.TempDir()
 	s := New(dir)
-	_ = s.Remember("a.com", CapStorage, ScopeAlways)
-	_ = s.Remember("b.com", CapStorage, ScopeSession)
-
-	if err := s.Forget("a.com", ""); err != nil {
-		t.Fatalf("Forget: %v", err)
+	_ = s.Remember("edge", "Personal", "a.com")
+	_ = s.Remember("brave", "Work", "a.com")
+	_ = s.Remember("edge", "Personal", "b.com")
+	n, err := s.Forget("a.com")
+	if err != nil || n != 2 {
+		t.Fatalf("Forget a.com = %d, %v; want 2", n, err)
 	}
-	if s.Remembered("a.com", CapStorage) {
-		t.Fatal("a.com still remembered after Forget")
+	if New(dir).Remembered("edge", "Personal", "a.com") {
+		t.Fatal("a.com still remembered")
 	}
-	if New(dir).Remembered("a.com", CapStorage) {
-		t.Fatal("a.com still durable after Forget")
-	}
-	if !s.Remembered("b.com", CapStorage) {
+	if !New(dir).Remembered("edge", "Personal", "b.com") {
 		t.Fatal("Forget a.com wrongly dropped b.com")
 	}
 }
@@ -67,16 +60,9 @@ func TestForget(t *testing.T) {
 func TestRememberReplaces(t *testing.T) {
 	dir := t.TempDir()
 	s := New(dir)
-	_ = s.Remember("site.com", CapStorage, ScopeAlways)
-	_ = s.Remember("site.com", CapStorage, ScopeAlways)
-
-	n := 0
-	for _, g := range New(dir).List() {
-		if g.Site == "site.com" && g.Capability == CapStorage {
-			n++
-		}
-	}
-	if n != 1 {
-		t.Fatalf("re-granting the same site made %d durable records, want 1", n)
+	_ = s.Remember("edge", "Personal", "s.com")
+	_ = s.Remember("edge", "Personal", "s.com")
+	if n := len(New(dir).List()); n != 1 {
+		t.Fatalf("re-grant made %d records, want 1", n)
 	}
 }

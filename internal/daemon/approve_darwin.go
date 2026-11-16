@@ -16,10 +16,13 @@ import (
 // A click on "Always allow" returns remember true, so the caller can stop
 // asking for this site (see consentFor); "Allow" allows the one change
 // without remembering it.
-var approve = func(task, what string) (remember bool, err error) {
+var approve = func(task, what, alsoAllows string) (remember bool, err error) {
 	msg := "An agent wants to " + what + "."
 	if task != "" {
 		msg = "The agent working on \"" + task + "\" wants to " + what + "."
+	}
+	if alsoAllows != "" {
+		msg += "\n\n" + alsoAllows
 	}
 	out, oerr := exec.Command("osascript",
 		"-e", "on run argv",
