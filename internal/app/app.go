@@ -127,7 +127,8 @@ Global flags:
   --browser <name>  browser to drive (%s, or <name>-agent
                     for the one bx launch starts); default: $BX_BROWSER, else
                     the one set by bx use, else the one with remote
-                    debugging on, else brave
+                    debugging on, else the first one you have used,
+                    else brave
   --profile <name>  profile display name or folder name, exact match
   --timeout <dur>   how long to wait on the page (default 30s)
 

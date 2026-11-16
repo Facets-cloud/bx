@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
+	"github.com/Facets-cloud/bx/internal/browser"
 	"github.com/Facets-cloud/bx/internal/daemon"
 	"github.com/Facets-cloud/bx/internal/exit"
 	"github.com/Facets-cloud/bx/plugin"
@@ -132,7 +134,8 @@ func versionCheck() check {
 
 func wrapNotFound(err error, label string) error {
 	if err != nil {
-		return exit.New(exit.Upstream, "%s is not installed in /Applications", label)
+		return exit.New(exit.Upstream, "%s is not installed in /Applications; if you use another browser, run bx use <name> (%s) or pass --browser",
+			label, strings.Join(browser.Names(), ", "))
 	}
 	return nil
 }

@@ -96,6 +96,15 @@ func TestDetect(t *testing.T) {
 	if b := Detect(); b.Name != Default {
 		t.Fatalf("no browser running: got %s, want %s", b.Name, Default)
 	}
+	// Used but debugging off: the first browser with a data dir.
+	c, _ := Lookup("chrome")
+	if err := os.MkdirAll(c.Dir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if b := Detect(); b.Name != "chrome" {
+		t.Fatalf("only chrome used: got %s, want chrome", b.Name)
+	}
+	// Debugging on wins over merely used.
 	v, _ := Lookup("vivaldi")
 	if err := os.MkdirAll(v.Dir(), 0o700); err != nil {
 		t.Fatal(err)

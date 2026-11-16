@@ -74,23 +74,33 @@ var table = []Browser{
 	},
 }
 
-// Default is the browser used when --browser is not given and no browser
-// has remote debugging on.
+// Default is the browser used when --browser is not given, no browser has
+// remote debugging on and none has a data dir.
 const Default = "brave"
 
 // Detect returns the first browser in the table that has remote debugging
-// on (its DevToolsActivePort exists), or Default when none has.
+// on (its DevToolsActivePort exists), else the first that has been used
+// (its data dir exists), else Default.
 func Detect() Browser {
 	for _, b := range table {
-		_, err := os.Stat(filepath.Join(b.Dir(), "DevToolsActivePort"))
-		// A permission error still means the browser is there; WSURL
-		// reports it properly later.
-		if err == nil || !errors.Is(err, fs.ErrNotExist) {
+		if exists(filepath.Join(b.Dir(), "DevToolsActivePort")) {
+			return b
+		}
+	}
+	for _, b := range table {
+		if exists(b.Dir()) {
 			return b
 		}
 	}
 	b, _ := Lookup(Default)
 	return b
+}
+
+// exists reports whether path is there. A permission error still means it
+// is; WSURL reports it properly later.
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil || !errors.Is(err, fs.ErrNotExist)
 }
 
 // Lookup returns the table entry named name (exact match).
