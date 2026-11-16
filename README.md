@@ -279,7 +279,9 @@ earlier versions still works and means `BX_MODE=watch`.
 - **Browsers:** Brave and Chrome (tested), Chromium, Edge, Arc and Vivaldi
   (same layout, not yet tested). `bx list browsers` shows which are
   installed, running and have debugging on; `bx use chrome` makes one the
-  default. Adding a Chromium browser is one entry in
+  default. Without one, bx picks the browser with debugging on, else the
+  first one you have used (Brave, Chrome, Chromium, Edge, Arc, Vivaldi, in
+  that order). Adding a Chromium browser is one entry in
   `internal/browser/browser.go`.
 - **Profiles:** every profile of that browser, by name, with its own
   logins. A task can act on any tab in any profile.
