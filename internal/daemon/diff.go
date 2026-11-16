@@ -23,7 +23,7 @@ func (sess *tabSession) takeSnapshot(ctx context.Context) (Snapshot, error) {
 	if loader != sess.refLoader {
 		prev = refState{} // a new document: number from e1 again
 	}
-	nodes, refs := buildSnapshot(tree.Nodes, prev)
+	nodes, refs := buildSnapshot(tree.Nodes, prev, sess.frameTrees(ctx)...)
 	sess.refs, sess.refLoader, sess.snap = refs, loader, nodes
 	named := make(map[string]string, len(nodes))
 	for _, n := range nodes {

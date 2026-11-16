@@ -9,6 +9,7 @@ import (
 
 	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/target"
 
 	"github.com/Facets-cloud/bx/internal/exit"
 )
@@ -47,43 +48,74 @@ var boolProps = map[string]bool{
 }
 
 // refState carries refs from one snapshot of a page to the next, so an
-// element keeps its ref while it stays on the page.
+// element keeps its ref while it stays on the page. A ref inside a frame
+// the browser runs in its own process (see frame) also names that frame:
+// backend node IDs are only unique within one.
 type refState struct {
-	refs map[string]cdp.BackendNodeID
-	next int // the number the next new ref gets
+	refs   map[string]cdp.BackendNodeID
+	frames map[string]target.ID // refs inside a frame; the rest are in the tab itself
+	next   int                  // the number the next new ref gets
+}
+
+// frameTree is the accessibility tree of one frame of the tab that runs in
+// its own process, and the iframe element in its parent (the tab, or
+// another such frame) that shows it.
+type frameTree struct {
+	id, parent target.ID // parent is "" for the tab itself
+	owner      cdp.BackendNodeID
+	nodes      []*accessibility.Node
+}
+
+// nodeKey is an element across the tab and its frames.
+type nodeKey struct {
+	frame   target.ID
+	backend cdp.BackendNodeID
 }
 
 // buildSnapshot turns an accessibility tree into numbered lines. An element
-// that prev already numbered keeps its ref; new ones get new numbers. It
-// returns the lines and the refs for the next snapshot.
-func buildSnapshot(nodes []*accessibility.Node, prev refState) ([]SnapNode, refState) {
-	byID := map[accessibility.NodeID]*accessibility.Node{}
-	var root *accessibility.Node
-	for _, n := range nodes {
-		byID[n.NodeID] = n
-		if n.ParentID == "" && root == nil {
-			root = n
+// that prev already numbered keeps its ref; new ones get new numbers. Each
+// frame's tree goes under its iframe element. It returns the lines and the
+// refs for the next snapshot.
+func buildSnapshot(nodes []*accessibility.Node, prev refState, frames ...frameTree) ([]SnapNode, refState) {
+	b := snapBuilder{trees: map[target.ID]map[accessibility.NodeID]*accessibility.Node{},
+		owned: map[nodeKey]target.ID{}, refs: map[string]cdp.BackendNodeID{}, frames: map[string]target.ID{},
+		old: map[nodeKey]string{}, next: max(prev.next, 1)}
+	roots := map[target.ID]*accessibility.Node{}
+	for _, t := range append([]frameTree{{nodes: nodes}}, frames...) {
+		byID := map[accessibility.NodeID]*accessibility.Node{}
+		for _, n := range t.nodes {
+			byID[n.NodeID] = n
+			if n.ParentID == "" && roots[t.id] == nil {
+				roots[t.id] = n
+			}
+		}
+		b.trees[t.id] = byID
+		if t.id != "" {
+			b.owned[nodeKey{t.parent, t.owner}] = t.id
 		}
 	}
-	b := snapBuilder{byID: byID, refs: map[string]cdp.BackendNodeID{}, old: map[cdp.BackendNodeID]string{}, next: max(prev.next, 1)}
+	b.roots = roots
 	for ref, id := range prev.refs {
-		b.old[id] = ref
+		b.old[nodeKey{prev.frames[ref], id}] = ref
 	}
-	if root != nil {
-		b.walk(root, 0, "", "")
+	if root := roots[""]; root != nil {
+		b.walk(root, "", 0, "", "")
 	}
-	return b.out, refState{refs: b.refs, next: b.next}
+	return b.out, refState{refs: b.refs, frames: b.frames, next: b.next}
 }
 
 type snapBuilder struct {
-	byID map[accessibility.NodeID]*accessibility.Node
-	out  []SnapNode
-	refs map[string]cdp.BackendNodeID
-	old  map[cdp.BackendNodeID]string // refs from the previous snapshot
-	next int
+	trees  map[target.ID]map[accessibility.NodeID]*accessibility.Node
+	roots  map[target.ID]*accessibility.Node
+	owned  map[nodeKey]target.ID // iframe element -> the frame it shows
+	out    []SnapNode
+	refs   map[string]cdp.BackendNodeID
+	frames map[string]target.ID
+	old    map[nodeKey]string // refs from the previous snapshot
+	next   int
 }
 
-func (b *snapBuilder) walk(n *accessibility.Node, depth int, parentName, parentRole string) {
+func (b *snapBuilder) walk(n *accessibility.Node, frame target.ID, depth int, parentName, parentRole string) {
 	role, name := axString(n.Role), axString(n.Name)
 	if role == "generic" && editable(n) {
 		role = "textbox" // a contenteditable element
@@ -100,16 +132,22 @@ func (b *snapBuilder) walk(n *accessibility.Node, depth int, parentName, parentR
 	childDepth, childParent, childRole := depth, parentName, parentRole
 	if keep && leafRoles[role] {
 		// A text field's inner editor and text repeat its value.
-		b.add(n, depth, role, name)
+		b.add(n, frame, depth, role, name)
 		return
 	}
 	if keep {
-		b.add(n, depth, role, name)
+		b.add(n, frame, depth, role, name)
 		childDepth, childParent, childRole = depth+1, name, role
 	}
 	for _, id := range n.ChildIDs {
-		if c := b.byID[id]; c != nil {
-			b.walk(c, childDepth, childParent, childRole)
+		if c := b.trees[frame][id]; c != nil {
+			b.walk(c, frame, childDepth, childParent, childRole)
+		}
+	}
+	// An iframe whose page runs in its own process: its page goes here.
+	if child, ok := b.owned[nodeKey{frame, n.BackendDOMNodeID}]; ok && n.BackendDOMNodeID != 0 {
+		if root := b.roots[child]; root != nil {
+			b.walk(root, child, childDepth, childParent, childRole)
 		}
 	}
 }
@@ -140,14 +178,17 @@ func editable(n *accessibility.Node) bool {
 var leafRoles = map[string]bool{"textbox": true, "searchbox": true, "spinbutton": true,
 	"Date": true, "DateTime": true, "InputTime": true} // a date field's day, month and year parts are fill's job
 
-func (b *snapBuilder) add(n *accessibility.Node, depth int, role, name string) {
-	ref, ok := b.old[n.BackendDOMNodeID]
+func (b *snapBuilder) add(n *accessibility.Node, frame target.ID, depth int, role, name string) {
+	ref, ok := b.old[nodeKey{frame, n.BackendDOMNodeID}]
 	if _, taken := b.refs[ref]; !ok || taken || n.BackendDOMNodeID == 0 {
 		ref = fmt.Sprintf("e%d", b.next)
 		b.next++
 	}
 	if n.BackendDOMNodeID != 0 {
 		b.refs[ref] = n.BackendDOMNodeID
+		if frame != "" {
+			b.frames[ref] = frame
+		}
 	}
 	b.out = append(b.out, SnapNode{Ref: ref, Depth: depth, Role: role, Name: clipText(name, 120),
 		Value: clipText(axString(n.Value), 120), Props: axProps(n)})

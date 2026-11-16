@@ -43,12 +43,11 @@ func (s *server) click(id, el string, double bool, timeout time.Duration) (ActRe
 	})
 }
 
-// center scrolls the element into view and returns its middle point.
-func center(ctx context.Context, sess *tabSession, el string, timeout time.Duration) (float64, float64, error) {
-	e, err := sess.element(ctx, el)
-	if err != nil {
-		return 0, 0, err
-	}
+// center scrolls the element into view and returns its middle point, in
+// the coordinates of the frame it is in (see elem.on).
+func center(ctx context.Context, e elem, timeout time.Duration) (float64, float64, error) {
+	el := e.name
+	ctx = e.on(ctx)
 	if _, err := chromedp.Run(ctx, chromedp.ScrollIntoView(e.q())); err != nil {
 		return 0, 0, tabErr(err, "scroll", el, timeout)
 	}
@@ -62,35 +61,53 @@ func center(ctx context.Context, sess *tabSession, el string, timeout time.Durat
 
 func (s *server) hover(id, el string, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		if e, err := sess.element(ctx, el); err == nil {
-			sess.indicate(ctx, "Hover", e.js)
-		}
-		x, y, err := center(ctx, sess, el, timeout)
+		e, err := sess.element(ctx, el)
 		if err != nil {
 			return err
 		}
-		_, err = chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x, y))
+		sess.indicateEl(ctx, "Hover", e)
+		x, y, err := center(ctx, e, timeout)
+		if err != nil {
+			return err
+		}
+		_, err = chromedp.Run(e.on(ctx), chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x, y))
 		return err
 	})
 }
 
-// drag presses the mouse on from, moves in steps to to, and releases.
+// drag presses the mouse on from, moves in steps to to, and releases. Both
+// must be in the same frame: the mouse goes to that frame's own target.
 func (s *server) drag(id, from, to string, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		if e, err := sess.element(ctx, from); err == nil {
-			sess.indicate(ctx, "Drag", e.js)
-		}
-		x1, y1, err := center(ctx, sess, from, timeout)
+		ef, err := sess.element(ctx, from)
 		if err != nil {
 			return err
 		}
-		x2, y2, err := center(ctx, sess, to, timeout)
+		et, err := sess.element(ctx, to)
 		if err != nil {
 			return err
 		}
+		if (ef.fr == nil) != (et.fr == nil) || (ef.fr != nil && ef.fr.f != et.fr.f) {
+			return exit.New(exit.User, "%s and %s are in different frames of the page: bx can only drag within one", from, to)
+		}
+		sess.indicateEl(ctx, "Drag", ef)
+		x1, y1, err := center(ctx, ef, timeout)
+		if err != nil {
+			return err
+		}
+		x2, y2, err := center(ctx, et, timeout)
+		if err != nil {
+			return err
+		}
+		var ox, oy float64 // the frame's offset, for the pointer on the tab's page
+		if ef.fr != nil {
+			ox, oy = ef.fr.ox, ef.fr.oy
+		}
+		page := ctx
+		ctx = ef.on(ctx)
 		press := chromedp.Steps(
 			chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x1, y1),
-			chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x1, y1, chromedp.ButtonLeft, chromedp.ClickCount(1)))
+			chromedp.MouseEvent(input.DispatchMouseEventTypeMousePressed, x1, y1, chromedp.ButtonLeft, held, chromedp.ClickCount(1)))
 		if _, err := chromedp.Run(ctx, press); err != nil {
 			return err
 		}
@@ -99,10 +116,10 @@ func (s *server) drag(id, from, to string, timeout time.Duration) (ActResult, er
 		for i := 1; i <= 10; i++ {
 			f := float64(i) / 10
 			x, y := x1+(x2-x1)*f, y1+(y2-y1)*f
-			if _, err := chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x, y, chromedp.ButtonLeft)); err != nil {
+			if _, err := chromedp.Run(ctx, chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, x, y, chromedp.ButtonLeft, held)); err != nil {
 				return err
 			}
-			sess.point(ctx, x, y)
+			sess.point(page, x+ox, y+oy)
 			if !sess.fast.Load() {
 				time.Sleep(between(12*time.Millisecond, 28*time.Millisecond))
 			}
@@ -167,12 +184,12 @@ func fillOne(ctx context.Context, sess *tabSession, el, value string, timeout ti
 	if err != nil {
 		return err
 	}
-	if _, err := chromedp.Run(ctx, chromedp.WaitVisible(e.q())); err != nil {
+	if _, err := chromedp.Run(e.on(ctx), chromedp.WaitVisible(e.q())); err != nil {
 		return tabErr(err, "fill", el, timeout)
 	}
-	sess.indicate(ctx, "Fill", e.js)
+	sess.indicateEl(ctx, "Fill", e)
 	q := e.js
-	kind, err := chromedp.Run(ctx, chromedp.Evaluate[string](fmt.Sprintf(fieldKindJS, q)))
+	kind, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[string](fmt.Sprintf(fieldKindJS, q)))
 	if err != nil {
 		return upstream("fill "+el, err)
 	}
@@ -180,7 +197,7 @@ func fillOne(ctx context.Context, sess *tabSession, el, value string, timeout ti
 	case "select":
 		sess.showSelect(ctx, e, value)
 		v, _ := json.Marshal(value)
-		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(selectOptionJS, q, v)))
+		ok, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[bool](fmt.Sprintf(selectOptionJS, q, v)))
 		if err != nil {
 			return upstream("fill "+el, err)
 		}
@@ -192,7 +209,7 @@ func fillOne(ctx context.Context, sess *tabSession, el, value string, timeout ti
 		return setChecked(ctx, sess, e, value, timeout)
 	case "value":
 		v, _ := json.Marshal(value)
-		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(setValueJS, q, v)))
+		ok, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[bool](fmt.Sprintf(setValueJS, q, v)))
 		if err != nil {
 			return upstream("fill "+el, err)
 		}
@@ -210,7 +227,7 @@ func setChecked(ctx context.Context, sess *tabSession, e elem, value string, tim
 	if !want && value != "false" {
 		return exit.New(exit.Validation, "%s is a checkbox or radio: the value must be true or false", el)
 	}
-	on, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(checkedJS, e.js)))
+	on, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[bool](fmt.Sprintf(checkedJS, e.js)))
 	if err != nil {
 		return upstream("fill "+el, err)
 	}
@@ -232,15 +249,15 @@ func typeInto(ctx context.Context, sess *tabSession, e elem, value string, timeo
 	} else if err := sess.press(ctx, e, "Fill", false); err != nil { // click into the field, as a person would
 		return tabErr(err, "fill", el, timeout)
 	}
-	if _, err := chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(selectAllJS, e.js))); err != nil {
+	if _, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[chromedp.Void](fmt.Sprintf(selectAllJS, e.js))); err != nil {
 		return upstream("fill "+el, err)
 	}
 	if value == "" {
-		_, err := chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](`document.execCommand("delete")`))
+		_, err := chromedp.Run(e.on(ctx), chromedp.Evaluate[chromedp.Void](`document.execCommand("delete")`))
 		return tabErr(err, "fill", el, timeout)
 	}
 	sess.say(ctx, sess.typingVerb(value))
-	return tabErr(sess.enter(ctx, value), "fill", el, timeout)
+	return tabErr(sess.enter(e.on(ctx), value), "fill", el, timeout)
 }
 
 // selectAllJS selects everything in a field, or in an editable element
@@ -267,7 +284,7 @@ func (s *server) typeText(id, el, text, submit string, timeout time.Duration) (A
 		combo = c
 	}
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		target := focusedJS
+		keys := ctx // where the keys go: the element's frame, else the tab
 		if el != "" {
 			e, err := sess.element(ctx, el)
 			if err != nil {
@@ -276,16 +293,18 @@ func (s *server) typeText(id, el, text, submit string, timeout time.Duration) (A
 			if err := sess.focusOrClick(ctx, e); err != nil {
 				return tabErr(err, "type", el, timeout)
 			}
-			target = e.js
+			sess.indicateEl(ctx, sess.typingVerb(text), e)
+			keys = e.on(ctx)
+		} else {
+			sess.indicate(ctx, sess.typingVerb(text), focusedJS)
 		}
-		sess.indicate(ctx, sess.typingVerb(text), target)
-		if err := sess.enter(ctx, text); err != nil {
+		if err := sess.enter(keys, text); err != nil {
 			return upstream("type", err)
 		}
 		if submit == "" {
 			return nil
 		}
-		if _, err := chromedp.Run(ctx, combo.action()); err != nil {
+		if _, err := chromedp.Run(keys, combo.action()); err != nil {
 			return upstream("press "+submit, err)
 		}
 		return nil
@@ -327,8 +346,8 @@ func (s *server) upload(id, el string, files []string, timeout time.Duration) (A
 		if err != nil {
 			return err
 		}
-		sess.indicate(ctx, fmt.Sprintf("Attach %d file(s)", len(abs)), e.js)
-		_, err = chromedp.Run(ctx, chromedp.SetUploadFiles(e.q(), abs))
+		sess.indicateEl(ctx, fmt.Sprintf("Attach %d file(s)", len(abs)), e)
+		_, err = chromedp.Run(e.on(ctx), chromedp.SetUploadFiles(e.q(), abs))
 		return tabErr(err, "upload", el, timeout)
 	})
 }
@@ -425,7 +444,7 @@ func (s *server) eval(id, src string, timeout time.Duration) (json.RawMessage, e
 }
 
 // wait polls until text appears, or an element matches (or, with gone,
-// until it no longer does).
+// until it no longer does). Text counts in the tab's frames too.
 func (s *server) wait(id, text, el string, gone bool, timeout time.Duration) (any, error) {
 	if (text == "") == (el == "") {
 		return nil, exit.New(exit.Validation, "wait needs exactly one of --text or --selector")
@@ -435,24 +454,25 @@ func (s *server) wait(id, text, el string, gone bool, timeout time.Duration) (an
 		return nil, err
 	}
 	defer sess.mu.Unlock()
-	cond := ""
+	var cond string
+	var in *frame // the element's frame, if it is in one
 	if text != "" {
 		q, _ := json.Marshal(text)
-		cond = fmt.Sprintf(`document.body && document.body.innerText.includes(%s)`, q)
+		cond = fmt.Sprintf(`!!document.body && document.body.innerText.includes(%s)`, q)
 	} else {
 		e, err := sess.element(sess.ctx, el)
 		if err != nil {
 			return nil, err
 		}
 		cond = fmt.Sprintf(`(e => !!e && e.isConnected && e.getClientRects().length > 0)(%s)`, e.js)
-	}
-	if gone {
-		cond = "!(" + cond + ")"
+		if e.fr != nil {
+			in = e.fr.f
+		}
 	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		ok, err := run(sess, 5*time.Second, chromedp.Evaluate[bool](cond))
-		if err == nil && ok {
+		there, err := sess.there(cond, text != "", in)
+		if err == nil && there != gone {
 			return nil, nil
 		}
 		if exit.CodeOf(err) == exit.User { // a dialog opened
@@ -461,6 +481,29 @@ func (s *server) wait(id, text, el string, gone bool, timeout time.Duration) (an
 		time.Sleep(250 * time.Millisecond)
 	}
 	return nil, exit.New(exit.User, "condition not met within %s", timeout)
+}
+
+// there evaluates cond in frame in, or in the tab when in is nil and, with
+// inFrames, in each of the tab's frames until one holds.
+func (sess *tabSession) there(cond string, inFrames bool, in *frame) (bool, error) {
+	eval := func(f *frame) (bool, error) {
+		ctx, cancel := context.WithTimeout(f.ctx, 5*time.Second)
+		defer cancel()
+		return chromedp.Run(ctx, chromedp.Evaluate[bool](cond))
+	}
+	if in != nil {
+		return eval(in)
+	}
+	ok, err := run(sess, 5*time.Second, chromedp.Evaluate[bool](cond))
+	if err != nil || ok || !inFrames {
+		return ok, err
+	}
+	for _, f := range sess.attachedFrames() {
+		if ok, err := eval(f); err == nil && ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // goTo navigates the tab to a URL, or back, forward or reload.
@@ -547,16 +590,16 @@ const scrollEndJS = `(e => { e.scrollTo({top: e.scrollHeight, left: 0}); return 
 // empty.
 func (s *server) scroll(id, el string, timeout time.Duration) (ActResult, error) {
 	return s.actOn(id, timeout, func(ctx context.Context, sess *tabSession) error {
-		target := "document.scrollingElement"
+		target, in := "document.scrollingElement", ctx
 		if el != "" {
 			e, err := sess.element(ctx, el)
 			if err != nil {
 				return err
 			}
-			sess.indicate(ctx, "Scroll", e.js)
-			target = e.js
+			sess.indicateEl(ctx, "Scroll", e)
+			target, in = e.js, e.on(ctx)
 		}
-		_, err := chromedp.Run(ctx, chromedp.Evaluate[float64](fmt.Sprintf(scrollEndJS, target)))
+		_, err := chromedp.Run(in, chromedp.Evaluate[float64](fmt.Sprintf(scrollEndJS, target)))
 		return tabErr(err, "scroll", el, timeout)
 	})
 }

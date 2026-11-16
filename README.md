@@ -285,6 +285,10 @@ earlier versions still works and means `BX_MODE=watch`.
   `internal/browser/browser.go`.
 - **Profiles:** every profile of that browser, by name, with its own
   logins. A task can act on any tab in any profile.
+- **Frames:** cross-site and sandboxed iframes, which the browser runs in
+  their own process. Snapshots show what is inside them, and clicks,
+  typing, hovers and drags go straight to the frame. Same-site iframes
+  that share the page's process aren't reached yet.
 - **An agent browser:** `bx launch` starts a separate instance with its own
   profile folder under `~/Library/Application Support/bx/`. It needs no
   setup and never shows the Allow dialog. Sign in there only to what agents
