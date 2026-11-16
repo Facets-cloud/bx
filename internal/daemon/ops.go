@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -252,7 +253,16 @@ func (s *server) read(id, el, format string, timeout time.Duration) (Content, er
 	}
 	ctx, cancel := context.WithTimeout(sess.ctx, timeout)
 	defer cancel()
-	v, err := chromedp.Run(e.on(ctx), a)
+	var v string
+	if e.fr != nil {
+		prop := "textContent"
+		if format == "html" {
+			prop = "outerHTML"
+		}
+		v, err = evalEl[string](ctx, e, fmt.Sprintf("(%s).%s", e.js, prop))
+	} else {
+		v, err = chromedp.Run(ctx, a)
+	}
 	return Content{Selector: el, Format: format, Content: v}, tabErr(err, "read", el, timeout)
 }
 

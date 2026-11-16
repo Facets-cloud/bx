@@ -41,7 +41,7 @@ Read:
              [--within <ref>]       only the part of the page under that ref
   bx read <tab> [--selector <el>] [--format text|html]
   bx screenshot <tab> [--selector <el>] [--full] [--out <file.png>|-]
-  bx eval <tab> '<js>' | --file <script.js>
+  bx eval <tab> '<js>' | --file <script.js> [--frame <ref>]
   bx wait <tab> --text <text> | --selector <el> [--gone]
 
 Debug (recorded from the first time bx touches the tab; console messages

@@ -226,7 +226,7 @@ func (s *server) noDownload(id, el string) error {
 		Text   string   `json:"text"`
 		Fields []string `json:"fields"`
 	}
-	raw, err := s.eval(id, openDialogJS, 5*time.Second)
+	raw, err := s.eval(id, openDialogJS, "", 5*time.Second)
 	if err == nil && json.Unmarshal(raw, &d) == nil && d.Text != "" {
 		msg += fmt.Sprintf("; a dialog opened instead: %q", d.Text)
 		if len(d.Fields) > 0 {

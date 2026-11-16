@@ -9,7 +9,6 @@ import (
 
 	"github.com/chromedp/cdproto/accessibility"
 	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/target"
 
 	"github.com/Facets-cloud/bx/internal/exit"
 )
@@ -49,26 +48,26 @@ var boolProps = map[string]bool{
 
 // refState carries refs from one snapshot of a page to the next, so an
 // element keeps its ref while it stays on the page. A ref inside a frame
-// the browser runs in its own process (see frame) also names that frame:
-// backend node IDs are only unique within one.
+// also names that frame's document (see docKey): backend node IDs are only
+// unique within a target.
 type refState struct {
-	refs   map[string]cdp.BackendNodeID
-	frames map[string]target.ID // refs inside a frame; the rest are in the tab itself
-	next   int                  // the number the next new ref gets
+	refs  map[string]cdp.BackendNodeID
+	in    map[string]docKey // refs inside a frame; the rest are in the tab's own page
+	shows map[string]docKey // an iframe's ref -> the document it shows
+	next  int               // the number the next new ref gets
 }
 
-// frameTree is the accessibility tree of one frame of the tab that runs in
-// its own process, and the iframe element in its parent (the tab, or
-// another such frame) that shows it.
+// frameTree is the accessibility tree of one frame's document, and the
+// iframe element in its parent document that shows it.
 type frameTree struct {
-	id, parent target.ID // parent is "" for the tab itself
-	owner      cdp.BackendNodeID
-	nodes      []*accessibility.Node
+	doc, parent docKey
+	owner       cdp.BackendNodeID
+	nodes       []*accessibility.Node
 }
 
 // nodeKey is an element across the tab and its frames.
 type nodeKey struct {
-	frame   target.ID
+	doc     docKey
 	backend cdp.BackendNodeID
 }
 
@@ -77,45 +76,45 @@ type nodeKey struct {
 // frame's tree goes under its iframe element. It returns the lines and the
 // refs for the next snapshot.
 func buildSnapshot(nodes []*accessibility.Node, prev refState, frames ...frameTree) ([]SnapNode, refState) {
-	b := snapBuilder{trees: map[target.ID]map[accessibility.NodeID]*accessibility.Node{},
-		owned: map[nodeKey]target.ID{}, refs: map[string]cdp.BackendNodeID{}, frames: map[string]target.ID{},
+	b := snapBuilder{trees: map[docKey]map[accessibility.NodeID]*accessibility.Node{},
+		roots: map[docKey]*accessibility.Node{}, owned: map[nodeKey]docKey{},
+		refs: map[string]cdp.BackendNodeID{}, in: map[string]docKey{}, shows: map[string]docKey{},
 		old: map[nodeKey]string{}, next: max(prev.next, 1)}
-	roots := map[target.ID]*accessibility.Node{}
 	for _, t := range append([]frameTree{{nodes: nodes}}, frames...) {
 		byID := map[accessibility.NodeID]*accessibility.Node{}
 		for _, n := range t.nodes {
 			byID[n.NodeID] = n
-			if n.ParentID == "" && roots[t.id] == nil {
-				roots[t.id] = n
+			if n.ParentID == "" && b.roots[t.doc] == nil {
+				b.roots[t.doc] = n
 			}
 		}
-		b.trees[t.id] = byID
-		if t.id != "" {
-			b.owned[nodeKey{t.parent, t.owner}] = t.id
+		b.trees[t.doc] = byID
+		if t.doc != (docKey{}) {
+			b.owned[nodeKey{t.parent, t.owner}] = t.doc
 		}
 	}
-	b.roots = roots
 	for ref, id := range prev.refs {
-		b.old[nodeKey{prev.frames[ref], id}] = ref
+		b.old[nodeKey{prev.in[ref], id}] = ref
 	}
-	if root := roots[""]; root != nil {
-		b.walk(root, "", 0, "", "")
+	if root := b.roots[docKey{}]; root != nil {
+		b.walk(root, docKey{}, 0, "", "")
 	}
-	return b.out, refState{refs: b.refs, frames: b.frames, next: b.next}
+	return b.out, refState{refs: b.refs, in: b.in, shows: b.shows, next: b.next}
 }
 
 type snapBuilder struct {
-	trees  map[target.ID]map[accessibility.NodeID]*accessibility.Node
-	roots  map[target.ID]*accessibility.Node
-	owned  map[nodeKey]target.ID // iframe element -> the frame it shows
-	out    []SnapNode
-	refs   map[string]cdp.BackendNodeID
-	frames map[string]target.ID
-	old    map[nodeKey]string // refs from the previous snapshot
-	next   int
+	trees map[docKey]map[accessibility.NodeID]*accessibility.Node
+	roots map[docKey]*accessibility.Node
+	owned map[nodeKey]docKey // iframe element -> the document it shows
+	out   []SnapNode
+	refs  map[string]cdp.BackendNodeID
+	in    map[string]docKey
+	shows map[string]docKey
+	old   map[nodeKey]string // refs from the previous snapshot
+	next  int
 }
 
-func (b *snapBuilder) walk(n *accessibility.Node, frame target.ID, depth int, parentName, parentRole string) {
+func (b *snapBuilder) walk(n *accessibility.Node, frame docKey, depth int, parentName, parentRole string) {
 	role, name := axString(n.Role), axString(n.Name)
 	if role == "generic" && editable(n) {
 		role = "textbox" // a contenteditable element
@@ -144,8 +143,11 @@ func (b *snapBuilder) walk(n *accessibility.Node, frame target.ID, depth int, pa
 			b.walk(c, frame, childDepth, childParent, childRole)
 		}
 	}
-	// An iframe whose page runs in its own process: its page goes here.
+	// An iframe: the document it shows goes here.
 	if child, ok := b.owned[nodeKey{frame, n.BackendDOMNodeID}]; ok && n.BackendDOMNodeID != 0 {
+		if keep {
+			b.shows[b.out[len(b.out)-1].Ref] = child
+		}
 		if root := b.roots[child]; root != nil {
 			b.walk(root, child, childDepth, childParent, childRole)
 		}
@@ -178,7 +180,7 @@ func editable(n *accessibility.Node) bool {
 var leafRoles = map[string]bool{"textbox": true, "searchbox": true, "spinbutton": true,
 	"Date": true, "DateTime": true, "InputTime": true} // a date field's day, month and year parts are fill's job
 
-func (b *snapBuilder) add(n *accessibility.Node, frame target.ID, depth int, role, name string) {
+func (b *snapBuilder) add(n *accessibility.Node, frame docKey, depth int, role, name string) {
 	ref, ok := b.old[nodeKey{frame, n.BackendDOMNodeID}]
 	if _, taken := b.refs[ref]; !ok || taken || n.BackendDOMNodeID == 0 {
 		ref = fmt.Sprintf("e%d", b.next)
@@ -186,8 +188,8 @@ func (b *snapBuilder) add(n *accessibility.Node, frame target.ID, depth int, rol
 	}
 	if n.BackendDOMNodeID != 0 {
 		b.refs[ref] = n.BackendDOMNodeID
-		if frame != "" {
-			b.frames[ref] = frame
+		if frame != (docKey{}) {
+			b.in[ref] = frame
 		}
 	}
 	b.out = append(b.out, SnapNode{Ref: ref, Depth: depth, Role: role, Name: clipText(name, 120),

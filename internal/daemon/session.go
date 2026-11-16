@@ -54,8 +54,9 @@ type tabSession struct {
 
 	mocks tabMocks // made-up responses for matching requests, see mock
 
-	bctx   context.Context      // the browser connection, for attaching to frames
-	frames map[target.ID]*frame // the tab's frames that run in their own process, by target
+	bctx   context.Context                       // the browser connection, for attaching to frames
+	frames map[target.ID]*frame                  // the tab's frames that run in their own process, by target
+	worlds map[docKey]runtime.ExecutionContextID // bx's own JavaScript world in each document, see world
 }
 
 // Dialog is a JavaScript alert, confirm, prompt or beforeunload dialog.
@@ -354,7 +355,7 @@ func (sess *tabSession) element(ctx context.Context, el string) (elem, error) {
 		if !ok || sess.loaderID(ctx) != sess.refLoader {
 			return elem{}, exit.New(exit.User, "%s is not in this tab's latest snapshot: run bx snapshot %s again", el, sess.id)
 		}
-		at = nodeKey{sess.refs.frames[el], id}
+		at = nodeKey{sess.refs.in[el], id}
 	case m != nil:
 		nth, _ := strconv.Atoi(m[3])
 		k, err := sess.findByName(ctx, m[1], m[2], max(nth, 1))
@@ -364,20 +365,33 @@ func (sess *tabSession) element(ctx context.Context, el string) (elem, error) {
 		at = k
 	default:
 		q, _ := json.Marshal(el)
-		return elem{name: el, js: fmt.Sprintf(deepQueryJS, q)}, nil
-	}
-	var fr *frameRef
-	t := sess.t
-	if at.frame != "" {
-		f := sess.frames[at.frame]
-		if f == nil || f.ctx.Err() != nil {
-			return elem{}, exit.New(exit.User, "the frame holding %s has gone: run bx snapshot %s again", el, sess.id)
+		js := fmt.Sprintf(deepQueryJS, q)
+		// The tab's own page first; the frames only when it has no match,
+		// so a selector costs one extra check on a page that has it.
+		if here, err := chromedp.Run(ctx, chromedp.Evaluate[bool]("!!"+js)); err != nil || here {
+			return elem{name: el, js: js}, nil
 		}
-		fr, t = &frameRef{f: f}, f.t
+		k, ok := sess.findCSS(ctx, el)
+		if !ok {
+			return elem{name: el, js: js}, nil // not there yet: waits look in the tab
+		}
+		at = k
 	}
-	e, err := sess.mark(ctx, t, el, at.backend)
-	e.fr = fr
-	return e, err
+	return sess.markAt(ctx, el, at)
+}
+
+// markAt marks the element at k (see mark), in the tab's own page or in
+// one of its frames.
+func (sess *tabSession) markAt(ctx context.Context, el string, k nodeKey) (elem, error) {
+	if k.doc == (docKey{}) {
+		return sess.mark(ctx, sess.t, el, k.backend, nil)
+	}
+	t := sess.targetOf(k.doc)
+	if t == nil || (k.doc.target != "" && sess.frames[k.doc.target].ctx.Err() != nil) {
+		return elem{}, exit.New(exit.User, "the frame holding %s has gone: run bx snapshot %s again", el, sess.id)
+	}
+	fr := &frameRef{f: sess.frames[k.doc.target], t: t}
+	return sess.mark(ctx, t, el, k.backend, fr)
 }
 
 // findByName waits, up to nameWait or the context's deadline, for the nth
@@ -389,15 +403,20 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 	defer cancel()
 	found := 0
 	for {
-		// The tab first, then its frames, in the order they nest.
+		// The tab's own page first; its frames, in the order they nest,
+		// only when it has too few.
 		var keys []nodeKey
-		for _, id := range sess.queryByName(wctx, sess.t, role, name) {
-			keys = append(keys, nodeKey{"", id})
+		for _, id := range queryByName(wctx, sess.t, "", role, name) {
+			keys = append(keys, nodeKey{docKey{}, id})
 		}
 		if len(keys) < nth {
-			for _, f := range sess.attachedFrames() {
-				for _, id := range sess.queryByName(wctx, f.t, role, name) {
-					keys = append(keys, nodeKey{f.id, id})
+			for _, d := range sess.docs(wctx)[1:] {
+				obj, err := sess.docObject(wctx, d)
+				if err != nil {
+					continue
+				}
+				for _, id := range queryByName(wctx, d.t, obj, role, name) {
+					keys = append(keys, nodeKey{d.key, id})
 				}
 			}
 		}
@@ -420,19 +439,23 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 const nameWait = 10 * time.Second
 
 // queryByName lists the DOM nodes, in page order, whose accessibility role
-// and name match. Ignored nodes (hidden ones) are left out.
-func (sess *tabSession) queryByName(ctx context.Context, t *chromedp.Target, role, name string) []cdp.BackendNodeID {
-	// The document as a JavaScript object: DOM.getDocument would reset the
-	// node IDs chromedp keeps for this tab.
-	doc, err := cdp.Call(ctx, t, runtime.Evaluate, runtime.EvaluateParams{Expression: "document"})
-	if err != nil || doc.Result == nil || doc.Result.ObjectID == "" {
-		return nil
+// and name match, in the document doc of target t (the target's own when
+// doc is ""). Ignored nodes (hidden ones) are left out.
+func queryByName(ctx context.Context, t *chromedp.Target, doc runtime.RemoteObjectID, role, name string) []cdp.BackendNodeID {
+	if doc == "" {
+		// The document as a JavaScript object: DOM.getDocument would reset
+		// the node IDs chromedp keeps for this tab.
+		res, err := cdp.Call(ctx, t, runtime.Evaluate, runtime.EvaluateParams{Expression: "document"})
+		if err != nil || res.Result == nil || res.Result.ObjectID == "" {
+			return nil
+		}
+		doc = res.Result.ObjectID
+		defer func() {
+			_, _ = cdp.Call(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: doc})
+		}()
 	}
-	defer func() {
-		_, _ = cdp.Call(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: doc.Result.ObjectID})
-	}()
 	res, err := cdp.Call(ctx, t, accessibility.QueryAXTree, accessibility.QueryAXTreeParams{
-		ObjectID: doc.Result.ObjectID, AccessibleName: name, Role: role})
+		ObjectID: doc, AccessibleName: name, Role: role})
 	if err != nil {
 		return nil
 	}
@@ -445,29 +468,35 @@ func (sess *tabSession) queryByName(ctx context.Context, t *chromedp.Target, rol
 	return ids
 }
 
-// mark makes the node reachable from JavaScript as el, and checks that it
-// is still in the page: apps that redraw a region replace its elements, and
-// a removed one would never become clickable.
-func (sess *tabSession) mark(ctx context.Context, t *chromedp.Target, el string, backend cdp.BackendNodeID) (elem, error) {
+// mark makes the node reachable from JavaScript as el, in its own window,
+// and checks that it is still in the page: apps that redraw a region
+// replace its elements, and a removed one would never become clickable.
+// For an element in a frame (fr set), it keeps the element as an object
+// there, so scripts on it run in the frame's window (see evalEl).
+func (sess *tabSession) mark(ctx context.Context, t *chromedp.Target, el string, backend cdp.BackendNodeID, fr *frameRef) (elem, error) {
 	node, err := cdp.Call(ctx, t, dom.ResolveNode, dom.ResolveNodeParams{BackendNodeID: backend})
 	if err != nil || node.Object == nil {
 		return elem{}, exit.New(exit.User, "%s is no longer on the page: run bx snapshot %s again", el, sess.id)
 	}
 	key, _ := json.Marshal(el)
-	yes := true
+	byValue := fr == nil
 	res, err := cdp.Call(ctx, t, runtime.CallFunctionOn, runtime.CallFunctionOnParams{
 		// A ref on text names its parent element.
-		FunctionDeclaration: fmt.Sprintf(`function() { const e = this.nodeType === 3 ? this.parentElement : this; const m = %s ||= {}; m[%s] = e; return !!e && e.isConnected; }`, refsJS, key),
+		FunctionDeclaration: fmt.Sprintf(`function() { const e = this.nodeType === 3 ? this.parentElement : this; const m = %s ||= {}; m[%s] = e; return !!e && e.isConnected ? (%t || e) : null; }`, refsJS, key, byValue),
 		ObjectID:            node.Object.ObjectID,
-		ReturnByValue:       &yes,
+		ReturnByValue:       &byValue,
 	})
 	if err != nil {
 		return elem{}, upstream("mark "+el, err)
 	}
-	if res.Result == nil || string(res.Result.Value) != "true" {
+	gone := res.Result == nil || (byValue && string(res.Result.Value) != "true") || (!byValue && res.Result.ObjectID == "")
+	if gone {
 		return elem{}, exit.New(exit.User, "%s was removed from the page (the page redrew it): use its new ref from the last action's changes, or take a snapshot", el)
 	}
-	return elem{name: el, js: fmt.Sprintf("%s[%s]", refsJS, key)}, nil
+	if fr != nil {
+		fr.obj = res.Result.ObjectID
+	}
+	return elem{name: el, js: fmt.Sprintf("%s[%s]", refsJS, key), fr: fr}, nil
 }
 
 // dropSession forgets a closed tab.

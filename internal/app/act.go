@@ -273,7 +273,7 @@ func cmdEval(e env) error {
 		return err
 	}
 	var res json.RawMessage
-	if err := e.call("eval", map[string]string{"tab": e.pos[0], "script": src, "timeout": t}, &res); err != nil {
+	if err := e.call("eval", map[string]string{"tab": e.pos[0], "script": src, "frame": e.a.flags["frame"], "timeout": t}, &res); err != nil {
 		return err
 	}
 	e.o.printJSON(res)

@@ -74,11 +74,14 @@ func (sess *tabSession) press(ctx context.Context, e elem, verb string, double b
 	sess.clicked.Store(time.Now().UnixNano())
 	x, y, ok := sess.indicateEl(ctx, verb, e)
 	if !ok {
+		if e.fr != nil {
+			return clickIn(ctx, e, double)
+		}
 		a := chromedp.Click(e.q())
 		if double {
 			a = chromedp.DoubleClick(e.q())
 		}
-		_, err := chromedp.Run(e.on(ctx), a)
+		_, err := chromedp.Run(ctx, a)
 		return err
 	}
 	if e.fr != nil {
@@ -136,7 +139,12 @@ func (sess *tabSession) enter(ctx context.Context, text string) error {
 // counts as the agent pointing at it, for paste's fallback.
 func (sess *tabSession) focusOrClick(ctx context.Context, e elem) error {
 	sess.clicked.Store(time.Now().UnixNano())
-	ctx = e.on(ctx)
+	if e.fr != nil {
+		if in, err := evalEl[bool](ctx, e, fmt.Sprintf(`(e => { e.focus(); return %s; })(%s)`, fmt.Sprintf(holdsFocusJS, "e"), e.js)); err == nil && in {
+			return nil
+		}
+		return clickIn(ctx, e, false)
+	}
 	if _, err := chromedp.Run(ctx, chromedp.Focus(e.q())); err == nil {
 		in, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(holdsFocusJS, e.js)))
 		if err == nil && in {
