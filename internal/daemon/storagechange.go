@@ -77,9 +77,10 @@ func (s *server) changeStorage(id string, c StorageChange, timeout time.Duration
 	if err := evalJSON(ctx, sess, "location.href", &page); err != nil {
 		return Changed{}, err
 	}
-	what := c.describe(host(page))
+	site := host(page)
+	what := c.describe(site)
 	task, _ := sess.title.Load().(string)
-	if err := approve(task, what); err != nil {
+	if err := consentFor(task, what, site, capStorage); err != nil {
 		return Changed{}, err
 	}
 	// The user may take up to a minute to answer: a fresh deadline for the change.
