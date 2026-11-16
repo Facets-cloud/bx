@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"log"
 	"sync"
 
 	"github.com/Facets-cloud/bx/internal/consent"
@@ -46,7 +47,11 @@ func consentFor(task, what, browser, profile, site string) (auto bool, err error
 		return false, err
 	}
 	if remember {
-		_ = store.Remember(browser, profile, site) // no-op for empty site
+		// A failed save is not fatal: the change was allowed, it just won't
+		// be remembered, so bx asks again next time. Log it rather than drop it.
+		if err := store.Remember(browser, profile, site); err != nil { // no-op for empty site
+			log.Printf("could not save the Always-allow choice for %s on %s: %v (bx will ask again next time)", profile, site, err)
+		}
 	}
 	return false, nil
 }
