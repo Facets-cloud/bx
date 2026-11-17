@@ -34,7 +34,7 @@ func (s *server) tabInfo(t *target.Info, names map[string]string) Tab {
 	s.mu.Lock()
 	dir := s.profileOf[t.BrowserContextID]
 	s.mu.Unlock()
-	return Tab{ID: string(t.TargetID), Profile: names[dir], ProfileDir: dir, Title: t.Title, URL: t.URL}
+	return Tab{ID: string(t.TargetID), Profile: names[dir], ProfileDir: dir, Title: stripTakeover(t.Title), URL: t.URL}
 }
 
 // profileNames maps profile dir -> display name. A failure leaves names out.
@@ -190,7 +190,7 @@ func (s *server) waitLoaded(id target.ID, timeout time.Duration) string {
 		title, err := chromedp.Run(ctx, chromedp.Evaluate[string](
 			`location.href !== "about:blank" && document.readyState === "complete" ? document.title || " " : ""`))
 		if err == nil && title != "" {
-			return strings.TrimSpace(title)
+			return strings.TrimSpace(stripTakeover(title))
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -287,7 +287,8 @@ func (s *server) screenshot(id, el string, full bool, timeout time.Duration) (Im
 		return Image{}, err
 	}
 	defer sess.mu.Unlock()
-	_, _ = run(sess, timeout, chromedp.Evaluate[chromedp.Void](removeIndicatorJS))
+	_, _ = run(sess, timeout, chromedp.Evaluate[chromedp.Void](removeIndicatorJS+"; "+hideTakeoverJS))
+	defer func() { _, _ = run(sess, timeout, chromedp.Evaluate[chromedp.Void](showTakeoverJS)) }()
 	a := chromedp.CaptureScreenshot()
 	switch {
 	case el != "":

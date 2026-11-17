@@ -35,10 +35,12 @@ func (s *server) pdf(id, dir, name string, timeout time.Duration) (Saved, error)
 	}
 	ctx, cancel := context.WithTimeout(sess.ctx, timeout)
 	defer cancel()
-	_, _ = chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](removeIndicatorJS)) // keep the pointer out of the PDF
+	// Keep the pointer and the takeover glow out of the PDF.
+	_, _ = chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](removeIndicatorJS+"; "+hideTakeoverJS))
+	defer func() { _, _ = chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](showTakeoverJS)) }()
 	if name == "" {
 		title, _ := chromedp.Run(ctx, chromedp.Title())
-		name = pdfName(title)
+		name = pdfName(stripTakeover(title))
 	}
 	yes := true
 	res, err := cdp.Call(ctx, sess.t, page.PrintToPDF, page.PrintToPDFParams{PrintBackground: &yes})

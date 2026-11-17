@@ -97,3 +97,21 @@ func TestPDFName(t *testing.T) {
 		}
 	}
 }
+
+func TestStripTakeover(t *testing.T) {
+	for in, want := range map[string]string{
+		"🔵 bx · Inbox (3) - Gmail":      "Inbox (3) - Gmail",
+		"🔵 bx · 🔵 bx · Inbox":           "Inbox",
+		"Inbox":                         "Inbox",
+		"🔵 bx · ":                       "",
+		"":                              "",
+		"Notes on 🔵 bx · in the middle": "Notes on 🔵 bx · in the middle",
+	} {
+		if got := stripTakeover(in); got != want {
+			t.Errorf("stripTakeover(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := pdfName(stripTakeover("🔵 bx · Order 42")); got != "Order 42.pdf" {
+		t.Errorf("pdf name from a marked title = %q", got)
+	}
+}

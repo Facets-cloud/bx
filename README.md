@@ -114,6 +114,14 @@ it shows "Done" and the summary, then goes away. If an agent never calls
 `done`, the pointer goes away 20 seconds after its last command (2 minutes
 for a titled task), or when its MCP connection ends.
 
+A tab an agent session acts on also carries a takeover mark, from the
+session's first command until `done` or until its MCP connection ends. A
+blue glow pulses around the page, the tab's title starts with `🔵 bx · `
+and its favicon becomes a blue "bx" tag, so the tab strip shows which tabs
+bx controls. All three stay when the tab loads another page, and the page
+gets its own favicon back at the end. bx hides the glow in its screenshots
+and PDFs and reports titles without the prefix.
+
 ## Install
 
 **Claude Code or Codex plugin** (the server plus the bx skill, which

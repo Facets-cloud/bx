@@ -451,7 +451,7 @@ const doneJS = `((summary) => { const h = document.querySelector("bx-indicator")
 
 // done tells every page bx has drawn on that the agent finished: it called
 // the done tool, or its MCP session ended. The pointer shows the summary,
-// if any, then goes away. Best effort.
+// if any, then goes away, and the takeover marker comes off. Best effort.
 // Only the tabs in touched, when given: one agent's done doesn't end
 // another agent's pointer.
 func (s *server) done(summary string, touched map[target.ID]bool) (any, error) {
@@ -470,6 +470,7 @@ func (s *server) done(summary string, touched map[target.ID]bool) (any, error) {
 	for _, sess := range all {
 		ctx, cancel := context.WithTimeout(sess.ctx, 2*time.Second)
 		_, _ = chromedp.Run(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(doneJS, q)))
+		sess.releaseTakeover(ctx)
 		cancel()
 	}
 	return nil, nil

@@ -77,7 +77,8 @@ func (s *server) start(a map[string]string) (any, error) {
 }
 
 // apply sets a tab's pointer and pacing for a request: the session's
-// choices when it made them, else the request's.
+// choices when it made them, else the request's. A session's request also
+// marks the tab as taken over, until done.
 func (t *task) apply(sess *tabSession, a map[string]string) {
 	pace, typing := a["pace"], a["typing"]
 	if t != nil {
@@ -92,6 +93,7 @@ func (t *task) apply(sess *tabSession, a map[string]string) {
 		t.actions++
 		sess.title.Store(t.title)
 		t.mu.Unlock()
+		sess.markTakeover()
 	} else {
 		sess.title.Store("")
 	}
