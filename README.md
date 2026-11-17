@@ -116,10 +116,11 @@ for a titled task), or when its MCP connection ends.
 
 A tab an agent session acts on also carries a takeover mark, from the
 session's first command until `done` or until its MCP connection ends. A
-blue glow pulses around the page and the tab's title starts with
-`🔵 bx · `, so the tab strip shows which tabs bx controls. Both stay when
-the tab loads another page. bx hides the glow in its screenshots and PDFs
-and reports titles without the prefix.
+blue glow pulses around the page, the tab's title starts with `🔵 bx · `
+and its favicon becomes a blue "bx" tag, so the tab strip shows which tabs
+bx controls. All three stay when the tab loads another page, and the page
+gets its own favicon back at the end. bx hides the glow in its screenshots
+and PDFs and reports titles without the prefix.
 
 ## Install
 

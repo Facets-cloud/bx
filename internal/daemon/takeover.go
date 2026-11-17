@@ -27,15 +27,31 @@ func stripTakeover(title string) string {
 // blue glow pulsing around the viewport and the prefix on the title. The
 // glow lives in a closed shadow root in the browser's top layer, like the
 // pointer, and takes no clicks. A page that rewrites its title (an unread
-// count) gets the prefix back. It runs on every new document of the tab
-// and once on the current one; a second run on the same page does nothing.
+// count) gets the prefix back. While marked, the tab's favicon is the bx
+// tag: the page's own icon links come out of the document (a page that
+// swaps its icon, as Gmail does for unread counts, has the new one taken
+// out too) and go back on release; a page that had none gets a link to
+// its /favicon.ico, since the browser would otherwise keep showing ours.
+// It runs on every new document of the tab and once on the current one; a
+// second run on the same page does nothing.
 const takeoverJS = `(() => {
 	if (window !== window.top) return; // the tab's page, not its iframes
 	const K = Symbol.for("bx.takeover"), P = "🔵 bx · ";
 	if (window[K]) return;
 	const t = window[K] = {};
 	const strip = () => { let s = document.title; while (s.startsWith(P)) s = s.slice(P.length); return s; };
-	const mark = () => { if (!document.title.startsWith(P)) document.title = P + strip(); };
+	const ICON = 'link[rel~="icon" i]';
+	t.icon = document.createElement("link");
+	t.icon.rel = "icon";
+	t.icon.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M3 0 H25 Q32 0 32 7 V25 Q32 32 25 32 H7 Q0 32 0 25 V3 Q0 0 3 0 Z" fill="#3b82f6"/><text x="16" y="21.5" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-weight="800" font-size="15" letter-spacing="-.5" fill="#fff">bx</text></svg>');
+	t.icons = []; // the page's latest icon links, put back on release
+	const mark = () => {
+		if (!document.title.startsWith(P)) document.title = P + strip();
+		if (!document.head) return;
+		const own = [...document.querySelectorAll(ICON)].filter(l => l !== t.icon);
+		if (own.length) { t.icons = own; own.forEach(l => l.remove()); }
+		if (t.icon.parentNode !== document.head) document.head.append(t.icon);
+	};
 	const setup = () => {
 		if (window[K] !== t) return; // released before the page was ready
 		const host = document.createElement("bx-takeover");
@@ -63,7 +79,15 @@ const takeoverJS = `(() => {
 		if (t.obs) t.obs.disconnect();
 		if (document.title.startsWith(P)) document.title = strip();
 		const h = t.host;
-		if (!h) return;
+		if (!h) return; // setup never ran: no glow, no icon swap
+		t.icon.remove();
+		if (document.head && !t.icons.length) { // the browser keeps a removed icon unless it gets another one
+			const l = document.createElement("link");
+			l.rel = "icon";
+			l.href = location.origin + "/favicon.ico";
+			t.icons = [l];
+		}
+		if (document.head) document.head.append(...t.icons);
 		h.animate([{opacity: 1}, {opacity: 0}], {duration: 400, easing: "ease-out", fill: "forwards"});
 		setTimeout(() => h.remove(), 400);
 	};
