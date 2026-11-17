@@ -50,6 +50,9 @@ type tabSession struct {
 	named     atomic.Value // map[string]string: each ref of the latest snapshot as role and name, for the log
 	clicked   atomic.Int64 // unix nanoseconds of the last click on the tab, see paste
 
+	tmu      sync.Mutex
+	takeover page.ScriptIdentifier // the takeover marker's script, while an agent session marks the tab
+
 	log *devLog // console and network activity, from the moment bx attached
 
 	mocks tabMocks // made-up responses for matching requests, see mock
@@ -304,7 +307,7 @@ func (sess *tabSession) location(ctx context.Context) (string, string) {
 	if err != nil || len(v) != 2 {
 		return "", ""
 	}
-	return v[0], v[1]
+	return v[0], stripTakeover(v[1])
 }
 
 var refPattern = regexp.MustCompile(`^e[0-9]+$`)
