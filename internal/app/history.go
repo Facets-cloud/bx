@@ -217,6 +217,9 @@ func pageLabel(e daemon.Entry) string {
 
 func actionLine(e daemon.Entry) string {
 	s := e.T.Local().Format("15:04:05") + "  " + strings.TrimSpace(e.Op+" "+e.Target)
+	if e.Auto {
+		s += "  (saved choice)"
+	}
 	if e.Error != "" {
 		return s + "  FAILED: " + e.Error
 	}

@@ -27,8 +27,12 @@ logins and cookies.
 - **You allow each storage change.** Changing a site's cookies or storage
   (`change_storage`, `bx storage <tab> set|delete|clear`) waits for you to
   click Allow in a macOS dialog that bx shows outside the browser. Deny is
-  the default, and no answer within a minute counts as Deny. On other
-  systems bx refuses these changes.
+  the default, and no answer within a minute counts as Deny. Clicking
+  "Always allow" remembers the grant for that browser, profile and site so
+  bx won't ask again. Changes allowed by a saved grant are logged in the audit
+  trail (`bx history` marks them with `(saved choice)`). You can review saved
+  allowances with `bx consent` and revoke them anytime with
+  `bx consent forget <site>`. On other systems bx refuses these changes.
 - **Downloads go where you say.** `download` and `pdf` save into
   `~/Downloads` or the folder named, under a name that can't point outside
   it, and never replace an existing file.

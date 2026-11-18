@@ -391,6 +391,8 @@ func setupTools() []mcpTool {
 			cmdSetup, map[string]any{"off": boolean("Turn it off instead.")}),
 		cliTool("launch", "Start a separate agent browser with its own profile folder: no setup and no Allow prompt, but its own logins. Then pass browser=<name>-agent. Ask the user first.",
 			cmdLaunch, nil),
+		cliTool("consent_list", "List the sites the user has told bx to always allow storage changes on, by browser and profile.",
+			cmdConsent, nil),
 	}
 }
 

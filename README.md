@@ -319,7 +319,10 @@ What limits it:
   clicks, so the rule depends on the agent following it.
 - **You allow each storage change.** `change_storage` touches your logins,
   so bx itself shows a macOS dialog, outside the browser, for every change.
-  Deny is the default, and no answer within a minute counts as Deny.
+  Deny is the default, and no answer within a minute counts as Deny. Clicking
+  "Always allow" remembers the approval scoped to that browser, profile and site.
+  Remembered changes are tracked in the audit log (`bx history` appends `(saved choice)`).
+  Use `bx consent` to list saved allowances and `bx consent forget <site>` to revoke them.
 - **Fence it with a profile.** Point agents at a profile that holds only the
   logins the task needs.
 - **Page text is data.** A page can try to tell an agent to act in another
