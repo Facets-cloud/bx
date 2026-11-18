@@ -18,8 +18,7 @@ an independent one:
 
 Playwright MCP and Chrome DevTools MCP are good tools with features bx
 doesn't have (cross-browser and headless runs, performance tracing). If
-you rerun this and get different numbers, open an issue and we'll update
-this page.
+a number here looks wrong, open an issue and we'll update this page.
 
 Measured 2026-11-14 on an Apple M5 MacBook (16 GB, macOS 27.2.1). Each tool ran the same two tasks 3 times through `claude -p` (Claude Code 2.1.325, model claude-opus-5-5), with only that tool's MCP server loaded and no built-in tools. All 18 runs reached the checked end state. Every number in the tables is a median of 3 runs unless the row says otherwise.
 
@@ -218,4 +217,4 @@ Use the browser tools to open http://localhost:8771/uc-wizard/index.html?run={RU
 Then open the Approvals inbox, review the request you just submitted and approve it with the comment "Documents verified and bank details checked." Reply with the request id and its final status.
 ```
 
-Files: `runs/<task>-<tool>-<n>.jsonl` (stream-json, each line prefixed with seconds since start), `.rss.tsv` (1 s memory samples), `.meta.json`, `.err`; `runs/summary.json` (all per-run metrics); `runs/nav.json`; `states/` (page-posted end states); `scripts/` (runner, checker, tables); `pages/` (bench copies of the test pages). Rebuild the tables with `python3 scripts/summarize.py && python3 scripts/tables.py`. Cost: 21 `claude -p` runs (18 measured + 3 one-turn smoke runs), $5.59 in total.
+Files: `runs/<task>-<tool>-<n>.jsonl` (stream-json, each line prefixed with seconds since start), `.rss.tsv` (1 s memory samples), `.meta.json`, `.err`; `runs/summary.json` (all per-run metrics); `runs/nav.json`; `states/` (page-posted end states); `scripts/` (runner, checker, tables); `pages/` (bench copies of the test pages). Cost: 21 `claude -p` runs (18 measured + 3 one-turn smoke runs), $5.59 in total.

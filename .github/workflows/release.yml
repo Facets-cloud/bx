@@ -19,7 +19,7 @@ jobs:
           for arch in arm64 amd64; do
             GOOS=darwin GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
               -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o bx .
-            tar -czf dist/bx_darwin_${arch}.tar.gz bx THIRD_PARTY_NOTICES
+            tar -czf dist/bx_darwin_${arch}.tar.gz bx LICENSE THIRD_PARTY_NOTICES
             rm bx
           done
           (cd dist && shasum -a 256 *.tar.gz > checksums.txt)
@@ -29,9 +29,8 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
 
   npm:
-    # Publishes @facets-cloud/bx and its per-platform binary packages, the
-    # same way facetsctl publishes @facets-cloud/facetsctlv3. Uses the
-    # org-level NPM_TOKEN secret.
+    # Publishes @facets-cloud/bx and its per-platform binary packages.
+    # Uses the repository secret NPM_TOKEN.
     needs: release
     runs-on: macos-latest
     steps:
