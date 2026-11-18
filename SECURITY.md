@@ -26,9 +26,10 @@ logins and cookies.
   use that socket, as it could use your browser anyway.
 - **You allow each storage change.** Changing a site's cookies or storage
   (`change_storage`, `bx storage <tab> set|delete|clear`) waits for you to
-  click Allow in a macOS dialog that bx shows outside the browser. Deny is
-  the default, and no answer within a minute counts as Deny. On other
-  systems bx refuses these changes.
+  allow it in a native dialog that bx shows outside the browser (on macOS, an
+  osascript prompt; on Windows, a native message box). The agent cannot
+  answer it. Deny/No is the default, and no answer within a minute counts as
+  Deny. On other systems bx refuses these changes.
 - **Downloads go where you say.** `download` and `pdf` save into
   `~/Downloads` or the folder named, under a name that can't point outside
   it, and never replace an existing file.
@@ -43,8 +44,8 @@ logins and cookies.
 ## What it doesn't protect against
 
 - **Software that can click for you.** The storage dialog stops an agent
-  that only has bx. A program with macOS Accessibility permission (or one
-  you run that controls the Mac) can press Allow.
+  that only has bx. A program with macOS Accessibility permission, or one on
+  Windows that can send clicks to other windows, can press Allow.
 
 - **Prompt injection.** An agent that reads a malicious page can be told,
   by text on that page, to act in another tab. bx can't tell your

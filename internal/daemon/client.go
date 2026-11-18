@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Facets-cloud/bx/internal/exit"
@@ -152,10 +151,10 @@ func startAndDial(browser, sock, lock, log string) (net.Conn, error) {
 		return nil, err
 	}
 	defer lf.Close()
-	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
+	if err := lockFile(lf); err != nil {
 		return nil, err
 	}
-	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+	defer unlockFile(lf)
 
 	// Another command may have started it while we waited for the lock.
 	if conn, err := net.Dial("unix", sock); err == nil {
@@ -186,7 +185,7 @@ func spawn(browser, log string) error {
 
 	cmd := exec.Command(self, "__daemon", "--browser", browser)
 	cmd.Stderr = logf
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachDaemon(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

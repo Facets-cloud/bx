@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -77,11 +78,23 @@ func TestLookup(t *testing.T) {
 }
 
 func TestTable(t *testing.T) {
+	if len(table) == 0 {
+		t.Skip("no browser table for this OS")
+	}
 	seen := map[string]bool{}
 	for _, b := range table {
-		if seen[b.Name] || b.Label == "" || !strings.HasPrefix(b.App, "/Applications/") ||
-			strings.HasPrefix(b.DataDir, "/") || !strings.HasSuffix(b.Inspect, "#remote-debugging") {
+		if seen[b.Name] || b.Label == "" || b.App == "" || !strings.HasSuffix(b.Inspect, "#remote-debugging") {
 			t.Errorf("bad table entry %+v", b)
+		}
+		switch runtime.GOOS {
+		case "darwin":
+			if !strings.HasPrefix(b.App, "/Applications/") || strings.HasPrefix(b.DataDir, "/") {
+				t.Errorf("darwin: bad paths %+v", b)
+			}
+		case "windows":
+			if !filepath.IsAbs(b.DataDir) {
+				t.Errorf("windows: DataDir must be absolute %+v", b)
+			}
 		}
 		seen[b.Name] = true
 	}
@@ -91,6 +104,9 @@ func TestTable(t *testing.T) {
 }
 
 func TestDetect(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("isolates data dirs via $HOME, which only redirects them on macOS; elsewhere this would touch real browser profiles")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if b := Detect(); b.Name != Default {
@@ -118,7 +134,7 @@ func TestDetect(t *testing.T) {
 }
 
 func TestAgentLookup(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	b, err := Lookup("brave-agent")
 	if err != nil || !b.Agent || b.Name != "brave-agent" || !filepath.IsAbs(b.DataDir) {
 		t.Fatalf("got %+v, %v", b, err)
@@ -132,6 +148,9 @@ func TestAgentLookup(t *testing.T) {
 }
 
 func TestEnableDebugging(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("isolates data dirs via $HOME, which only redirects them on macOS; elsewhere this would touch real browser profiles")
+	}
 	t.Setenv("HOME", t.TempDir())
 	b, _ := Lookup("brave")
 	os.MkdirAll(b.Dir(), 0o700)
@@ -178,7 +197,7 @@ func TestEnableDebugging(t *testing.T) {
 }
 
 func TestAgentHasDefaultProfile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	b, _ := Lookup("brave-agent")
 	ps, err := b.Profiles()
 	if err != nil || len(ps) != 1 || ps[0].Dir != "Default" {
