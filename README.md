@@ -392,14 +392,10 @@ folder. [mx](https://github.com/Facets-cloud/mx) writes the same format.
 
 ## How it compares
 
-- **Playwright MCP and Chrome DevTools MCP** by default start their own
-  browser with a separate profile, so the agent isn't signed in to anything. bx uses your
-  running browser and its profiles. On a 6-step vendor onboarding form, the
-  same agent needed a median of 24 tool calls with bx against 62 with
-  Playwright MCP, because `batch` fills a whole step in one call; bx's
-  server used about 29 MB of memory against 251 MB and 290 MB. It's a small
-  benchmark we ran ourselves, on pages we wrote, after tuning bx: the
-  method, every run, where bx lost and the caveats are in
+- **Tools that start their own browser** use a fresh profile, so the agent
+  isn't signed in to anything. bx uses your running browser and its
+  profiles, and `batch` fills a whole form step in one call. We ran a small
+  benchmark of our own; the method and caveats are in
   [docs/benchmark.md](docs/benchmark.md).
 - **Computer use with screenshots** sees pixels: each step costs a
   screenshot and a guess at coordinates, and the window must be in front.

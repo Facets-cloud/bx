@@ -191,12 +191,6 @@
   .browsers { margin-top: 12px; display: grid; gap: 6px; font-size: 14px; }
   .browsers div { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
   .browsers code { background: none; padding: 0; color: var(--muted); }
-  .cmpt { margin-top: 40px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
-  .cmpt table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 15px; }
-  .cmpt th { text-align: left; font: 500 12px "JetBrains Mono", monospace; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; padding: 0 12px 10px 0; }
-  .cmpt td { padding: 11px 12px 11px 0; border-top: 1px solid var(--line); color: var(--muted); vertical-align: top; }
-  .cmpt td:first-child { color: var(--fg); }
-  .cmpt td.us { color: var(--fg); font-weight: 600; }
   .tree { margin-top: 40px; background: var(--term); color: var(--termfg); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; overflow-x: auto; }
   .tree pre { margin: 0; font: 13.5px/1.65 "JetBrains Mono", monospace; white-space: pre; }
   .tree .c { color: #8a8a82; }
@@ -260,7 +254,7 @@
 <nav>
   <div class="wrap">
     <a class="mark" href="#"><b>b</b>x</a>
-    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#compare">Compared</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a><button class="theme" id="theme" type="button" aria-label="Switch theme">auto</button></div>
+    <div class="links"><a class="opt" href="#exec">How it works</a><a class="opt" href="#demo">Demo</a><a class="opt" href="#runs">Real runs</a><a class="opt" href="#modes">Modes</a><a class="opt" href="#history">History</a><a href="#setup">Setup</a><a href="https://github.com/Facets-cloud/bx">GitHub</a><button class="theme" id="theme" type="button" aria-label="Switch theme">auto</button></div>
   </div>
 </nav>
 
@@ -412,18 +406,6 @@ docker exec -it api sh</pre>
     </div>
   </section>
 
-  <section id="compare">
-    <div class="kicker">// compared</div>
-    <h2>Fewer calls on multi-step forms.</h2>
-    <p class="sub">On a 6-step vendor onboarding form (a shadow-DOM bank form, a PDF upload, an approval), the same agent needed a median of <b>24 tool calls with bx against 62 with Playwright MCP</b>: <code>batch</code> fills a whole step in one call. All runs of both finished the task.</p>
-    <div class="cmpt"><table>
-      <tr><th></th><th>bx</th><th>Playwright MCP</th><th>Chrome DevTools MCP</th></tr>
-      <tr><td>MCP server memory</td><td class="us">29 MB (about 95 MB started through npx)</td><td>251 MB</td><td>290 MB</td></tr>
-      <tr><td>Your logged-in browser</td><td class="us">Yes: the profile you name, one Allow click</td><td>Through a browser extension, or a browser started with a debugging port</td><td>Through remote debugging on Chrome 144+</td></tr>
-      <tr><td>Browser download</td><td class="us">None: uses the Chromium browser you have</td><td>None if Chrome or Edge is installed</td><td>None, needs Chrome</td></tr>
-    </table></div>
-    <div class="callout"><b>A small benchmark, run by us.</b> We wrote the test pages and tuned bx after the first round, with three runs per tool on one Mac. On a keyboard-only spreadsheet the two came out even, and Playwright MCP has things bx doesn't, such as cross-browser and headless runs. Method, every run, where bx lost and the caveats: <a href="https://github.com/Facets-cloud/bx/blob/main/docs/benchmark.md">docs/benchmark.md</a>.</div>
-  </section>
 
   <section id="history">
     <div class="kicker">// history</div>
