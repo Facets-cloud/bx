@@ -8,6 +8,8 @@ import (
 	"io"
 	"maps"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -170,15 +172,41 @@ func callTool(params json.RawMessage, byName map[string]mcpTool) map[string]any 
 	if p.Arguments == nil {
 		p.Arguments = map[string]any{}
 	}
+	if err := checkArgs(t, p.Arguments); err != nil {
+		return toolError(err)
+	}
 	c, err := t.run(p.Arguments)
 	if err != nil {
 		return toolError(err)
 	}
 	if c.image != nil {
-		return map[string]any{"content": []any{map[string]any{
-			"type": "image", "mimeType": "image/png", "data": base64.StdEncoding.EncodeToString(c.image)}}}
+		content := []any{map[string]any{
+			"type": "image", "mimeType": "image/png", "data": base64.StdEncoding.EncodeToString(c.image)}}
+		if c.text != "" {
+			content = append(content, map[string]any{"type": "text", "text": c.text})
+		}
+		return map[string]any{"content": content}
 	}
 	return map[string]any{"content": []any{map[string]any{"type": "text", "text": c.text}}}
+}
+
+// checkArgs rejects arguments the tool does not take, so a misnamed one
+// (out for pdf's dir) fails instead of being silently dropped. browser and
+// timeout are taken by every tool.
+func checkArgs(t mcpTool, args map[string]any) error {
+	props, _ := t.InputSchema["properties"].(map[string]any)
+	var unknown []string
+	for k := range args {
+		if _, ok := props[k]; !ok && k != "browser" && k != "timeout" {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	slices.Sort(unknown)
+	return exit.New(exit.Validation, "%s does not take %s; it takes %s", t.Name,
+		strings.Join(unknown, ", "), strings.Join(slices.Sorted(maps.Keys(props)), ", "))
 }
 
 func toolError(err error) map[string]any {
@@ -332,9 +360,11 @@ func readTools() []mcpTool {
 		opTool("read", "Text or HTML of the page or one element.", "read",
 			map[string]any{"tab": tab, "selector": str(elDesc + " Default: body."), "format": str("text (default) or html.")},
 			[]string{"tab"}, map[string]string{"tab": "tab", "selector": "selector", "format": "format"}),
-		{Name: "screenshot", Description: "PNG of the visible page, the full page, or one element.",
-			InputSchema: schema(map[string]any{"tab": tab, "selector": el, "full": boolean("Capture the whole page.")}, []string{"tab"}),
-			run:         screenshotTool},
+		{Name: "screenshot", Description: "PNG of the visible page, the full page, or one element. " +
+			"With path, also saves it there and returns the path and size.",
+			InputSchema: schema(map[string]any{"tab": tab, "selector": el, "full": boolean("Capture the whole page."),
+				"path": str("Absolute file path to save the PNG to; missing folders are created. An existing file is replaced.")}, []string{"tab"}),
+			run: screenshotTool},
 		opTool("eval", "Run JavaScript in the page and return its JSON result. Takes an expression or a function such as () => document.title.", "eval",
 			map[string]any{"tab": tab, "script": str("JavaScript expression or function."),
 				"frame": str("Ref of an Iframe line in the snapshot: run the script in the page that frame shows. Default: the tab's own page.")},
@@ -575,11 +605,33 @@ func screenshotTool(args map[string]any) (mcpContent, error) {
 	if req["timeout"] == "" {
 		req["timeout"] = "30s"
 	}
+	path := argString(args, "path")
+	if path != "" && !filepath.IsAbs(path) {
+		return mcpContent{}, exit.New(exit.Validation, "screenshot: path must be absolute, got %q", path)
+	}
 	var img daemon.Image
 	if err := daemon.Call(b.Name, daemon.Request{Op: "screenshot", Args: req}, &img, true); err != nil {
 		return mcpContent{}, err
 	}
-	return mcpContent{image: img.PNG}, nil
+	if path == "" {
+		return mcpContent{image: img.PNG}, nil
+	}
+	if err := savePNG(path, img.PNG); err != nil {
+		return mcpContent{}, err
+	}
+	out, _ := json.Marshal(map[string]any{"path": path, "bytes": len(img.PNG)})
+	return mcpContent{image: img.PNG, text: string(out)}, nil
+}
+
+// savePNG writes a screenshot to path, creating missing folders.
+func savePNG(path string, png []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return exit.New(exit.User, "screenshot: %v", err)
+	}
+	if err := os.WriteFile(path, png, 0o644); err != nil {
+		return exit.New(exit.User, "screenshot: %v", err)
+	}
+	return nil
 }
 
 func fillTool(args map[string]any) (mcpContent, error) {

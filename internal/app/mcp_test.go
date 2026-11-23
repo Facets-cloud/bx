@@ -122,3 +122,27 @@ func TestAddMCPServerKeepsOtherSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMCPRejectsUnknownArgs(t *testing.T) {
+	r := mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pdf","arguments":{"tab":"T","out":"/tmp/x"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"screenshot","arguments":{"tab":"T","file":"/tmp/x.png"}}}`,
+	)
+	for id, want := range map[string]string{"1": "pdf does not take out; it takes browser, dir, name, tab", "2": "screenshot does not take file"} {
+		res := r[id]["result"].(map[string]any)
+		text := res["content"].([]any)[0].(map[string]any)["text"].(string)
+		if res["isError"] != true || !strings.Contains(text, want) {
+			t.Errorf("call %s: want error containing %q, got %v", id, want, res)
+		}
+	}
+}
+
+func TestSavePNGCreatesFolders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "b", "shot.png")
+	if err := savePNG(path, []byte("png")); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != "png" {
+		t.Fatalf("read back %q, %v", b, err)
+	}
+}
