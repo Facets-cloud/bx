@@ -187,7 +187,7 @@ func (s *server) dispatch(req Request) (any, error) {
 	case "tabs":
 		return s.tabs(a["profile"])
 	case "open":
-		tab, err := s.open(a["profile"], a["url"], t)
+		tab, err := s.open(a["profile"], a["url"], !s.follows(a), t)
 		if sess, serr := s.session(tab.ID); err == nil && serr == nil {
 			tk := s.taskFor(a["session"])
 			tk.noteOpened(sess.id)
