@@ -33,6 +33,24 @@ network   request=n2                           {"error": "coupon SAVE10 expired"
 done      "Reproduced Place order failure; found root cause"
 ```
 
+## Before you start
+
+- **A browser built on Chromium 144 or later.** That's Chrome 144+, or
+  Brave, Edge, Arc or Vivaldi on Chromium 144+. Brave is the one tested end
+  to end. The browser's About page shows its Chromium version.
+- **Remote debugging on**, once per browser, at its inspect page:
+  `brave://inspect/#remote-debugging` (Chrome and Arc: `chrome://`, Edge:
+  `edge://`, Vivaldi: `vivaldi://`). Chromium 144 added this switch. Or quit
+  the browser and let the agent run `setup`, which turns it on for you.
+- **Full Disk Access on macOS 27 and later**, for the app that runs bx:
+  your terminal, editor, Claude Desktop, Cursor or other agent app. bx reads
+  the browser's `DevToolsActivePort` and `Local State` files, and macOS
+  blocks that without it. [Why](#turn-on-remote-debugging).
+- **One Allow click** per browser run, when bx first connects.
+
+The `launch` tool skips the last two: it starts a separate copy of the
+browser, with its own logins, that needs neither.
+
 ## How it works
 
 The agent snapshots a page and gets one line per thing it can click or type
@@ -91,13 +109,20 @@ bx goes (pace).
 
 | You say | Mode | Pace | What happens |
 | --- | --- | --- | --- |
-| nothing, or "in the background" | `fast` (default) | `full` (default) | The browser stays where it is, so you keep working. Each step runs as soon as the page settles. |
+| nothing, or "in the background" | `fast` (default) | `full` (default) | The browser stays where it is, so you keep working. New tabs open behind the one you're on. Each step runs as soon as the page settles. |
 | "show me", "let me watch" | `watch` | `full` | The tab bx works in comes to the front, and follows bx from tab to tab and profile to profile. |
 | "at human pace", "slowly" | (unchanged) | `human` | The pointer glides with the real mouse, clicks land near the middle rather than on it, a native dropdown unfolds to the choice, and batch steps pause briefly. |
 
 A 32-step form took 8 s at full pace and 50 s at human pace. Every mode
-opens new tabs in front, scrolls what it acts on into view, and sends real
-mouse and keyboard events, the kind a page can't tell from yours.
+scrolls what it acts on into view and sends real mouse and keyboard
+events, the kind a page can't tell from yours.
+
+Two cases still bring a tab forward in `fast` mode, because bx has to ask
+the browser's app to open a page, and the browser shows it: opening a tab
+in a profile other than the one the browser treats as current (the
+DevTools Protocol can't open tabs there), and the first `open` in each
+profile per browser run, when bx opens a probe page to learn which tabs
+belong to that profile.
 
 `typing` is `paste` (default: the text goes in at once, as a paste, which
 plain fields, rich text editors and autocompletes accept) or `keys` (typed
@@ -156,9 +181,10 @@ is an unrelated WebdriverIO tool.
 
 ### Turn on remote debugging
 
-Once per browser, turn on its remote-debugging switch. `doctor` names the
-page (such as `brave://inspect/#remote-debugging`), or quit the browser and
-let the agent run the `setup` tool, which turns it on and starts the browser
+Once per browser, turn on its remote-debugging switch (Chromium 144 and
+later have it). `doctor` names the page (such as
+`brave://inspect/#remote-debugging`), or quit the browser and let the
+agent run the `setup` tool, which turns it on and starts the browser
 again. The first bx call after that makes the browser ask you to Allow.
 
 On macOS 27 and later, give the app that runs bx (your terminal, editor or

@@ -78,6 +78,8 @@
   .installer pre.prompt { white-space: pre-wrap; max-height: 168px; overflow-y: auto; color: #cfcfca; scrollbar-width: thin; }
   .installer .btn { background: #222226; color: #f1f1ef; border-color: #2e2e33; }
   .installer .hint { padding: 0 18px 12px; font-size: 13px; color: #77776f; }
+  .needs { margin-top: 14px; font-size: 14.5px; color: var(--muted); max-width: 600px; }
+  .needs a { color: var(--fg); }
   .ctas { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 14px; color: var(--faint); }
   .btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 
@@ -266,6 +268,7 @@
       <h1>Run your agent's commands in the browser you already have open.</h1>
       <p class="lede">Your profile, your tabs, your logins. Claude Code, Codex and Cursor can click through a page and read its console, network and storage, like you would in DevTools.</p>
       <div class="installer"></div>
+      <p class="needs">Needs a browser built on Chromium 144 or later (Chrome, Brave, Edge, Arc, Vivaldi) with remote debugging switched on, and on macOS 27, Full Disk Access for the app that runs bx. <a href="#setup">Setup</a></p>
       <div class="ctas"><a class="btn primary" href="#demo">Watch the demo</a><a class="btn" href="#setup">Setup in 3 steps</a><span>MIT · no telemetry</span></div>
       <a class="badge" href="https://scuffmark.facets.cloud/c/bx"><img src="https://scuffmark.facets.cloud/badge/bx.svg" alt="scuffmark: bx" height="20"></a>
     </div>
@@ -373,7 +376,7 @@ docker exec -it api sh</pre>
         <div class="lbl">Default</div>
         <h3>Fast mode <code>mode fast</code></h3>
         <ul>
-          <li>The browser stays where it is, so you keep working.</li>
+          <li>The browser stays where it is, so you keep working. New tabs open behind the one you're on.</li>
           <li>The pointer jumps to each element and says what it's doing.</li>
           <li>Each step runs as soon as the page settles.</li>
         </ul>
@@ -448,13 +451,14 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   <section id="setup">
     <div class="kicker">// setup</div>
     <h2>Three steps, once per browser.</h2>
+    <div class="callout" style="margin:24px 0"><b>Before you start:</b> bx needs a browser built on Chromium 144 or later, the version that added the remote-debugging switch below. That's Chrome 144+, or Brave, Edge, Arc or Vivaldi on Chromium 144+; Brave is the one tested end to end. The browser's About page shows its Chromium version.</div>
     <div class="steps">
       <div class="step"><h3>Install the plugin</h3><p>Claude Code and Codex: the command at the top. It brings the MCP server and the skill, and updates with the plugin manager. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>. Any other MCP app: <code>npx -y @facets-cloud/bx mcp</code>.</p></div>
-      <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open this page in your browser and switch it on.</p>
+      <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open the Remote debugging tab of this page in your browser (<code>#remote-debugging</code>) and switch it on. Or quit the browser and let your agent run bx's <code>setup</code> tool.</p>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
     </div>
-    <div class="callout"><b>macOS 27 and later:</b> give the app that runs the server Full Disk Access (your terminal, or Claude Desktop or Cursor). bx reads <code>DevToolsActivePort</code> and <code>Local State</code> in the browser's folder, and macOS 27 blocks that otherwise. Rather not? The <code>launch</code> tool starts a separate copy of the browser that needs neither Full Disk Access nor the Allow click.</div>
+    <div class="callout"><b>macOS 27 and later:</b> give the app that runs bx Full Disk Access (your terminal, your editor, Claude Desktop, Cursor or any other agent app). macOS grants it per app, and bx inherits it from the app that starts it. bx reads <code>DevToolsActivePort</code> and <code>Local State</code> in the browser's folder, and macOS 27 blocks that otherwise. Rather not? The <code>launch</code> tool starts a separate copy of the browser that needs neither Full Disk Access nor the Allow click.</div>
   </section>
 
   <section id="tools">
@@ -499,7 +503,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
    - Claude Code, as a plugin (MCP server and skill): claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
    - Codex, as a plugin: codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
    - Claude Desktop or Cursor, as an MCP server: npx -y @facets-cloud/bx mcp install
-2. Ask which browser I use, and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
+2. Ask which browser I use (it must be built on Chromium 144 or later; its About page shows the version), and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
 3. If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
 4. Tell me how bx works by default: full speed, with the browser left where it is. I can say "show me" to bring the browser to the front, or "at human pace" to slow it down, for any task. To change the defaults, run: npx -y @facets-cloud/bx config set mode watch (or pace human).
 5. Tell me to restart this app, then run the bx doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;

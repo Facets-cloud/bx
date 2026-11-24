@@ -140,7 +140,7 @@ func (s *server) tabs(profileRef string) ([]Tab, error) {
 	return out, nil
 }
 
-func (s *server) open(profileRef, rawURL string, timeout time.Duration) (Tab, error) {
+func (s *server) open(profileRef, rawURL string, background bool, timeout time.Duration) (Tab, error) {
 	if err := browser.CheckURL(rawURL); err != nil {
 		return Tab{}, err
 	}
@@ -159,7 +159,7 @@ func (s *server) open(profileRef, rawURL string, timeout time.Duration) (Tab, er
 	if probe != "" {
 		defer s.closeTarget(probe)
 	}
-	t, err := s.openTab(ctxID, probe, p.Dir, rawURL)
+	t, err := s.openTab(ctxID, probe, p.Dir, rawURL, background)
 	if err != nil {
 		return Tab{}, err
 	}
@@ -364,13 +364,14 @@ func (s *server) cdp(tab, method, params string, timeout time.Duration) (json.Ra
 	return res, nil
 }
 
-// openTab opens rawURL in a new tab, in front, of the profile whose
-// context is ctxID. It first asks the browser over the protocol, which
-// Chromium allows only in the profile it treats as current; otherwise it
-// opens the URL the way a link from another app would.
-func (s *server) openTab(ctxID cdp.BrowserContextID, probe target.ID, dir, rawURL string) (*target.Info, error) {
+// openTab opens rawURL in a new tab of the profile whose context is ctxID,
+// behind the current tab when background is set. It first asks the
+// browser over the protocol, which Chromium allows only in the profile it
+// treats as current; otherwise it opens the URL the way a link from
+// another app would, which brings the browser to the front.
+func (s *server) openTab(ctxID cdp.BrowserContextID, probe target.ID, dir, rawURL string, background bool) (*target.Info, error) {
 	res, err := chromedp.CallBrowser(s.ctx, target.CreateTarget, target.CreateTargetParams{
-		URL: rawURL, BrowserContextID: ctxID})
+		URL: rawURL, BrowserContextID: ctxID, Background: &background})
 	if err == nil {
 		return s.waitFor(func(t *target.Info) bool { return t.TargetID == res.TargetID })
 	}
