@@ -16,9 +16,10 @@ bx is one Go binary with no runtime dependencies. It is a CLI and an MCP
 server (JSON-RPC 2.0 on stdio), talks to the browser over the DevTools
 Protocol, and has no telemetry.
 
-**Platforms:** macOS, on Apple silicon and Intel. bx's lookup of browsers,
-profiles and processes is Mac-specific; the browsers offer the same remote
-debugging on every OS, so Linux and Windows ports are welcome.
+**Platforms:** macOS (Apple silicon and Intel) and Windows (x64). Supported
+browsers are Edge, Brave, Chrome, Vivaldi and Chromium. On Windows, install
+for now via `go install github.com/Facets-cloud/bx@latest` (npm packaging is a
+follow-up); the approval prompt is a native Windows dialog.
 
 ```
 > Place order does nothing on staging. Reproduce it and find the root cause.
@@ -381,7 +382,7 @@ folder. [mx](https://github.com/Facets-cloud/mx) writes the same format.
 
 ## Limits
 
-- **macOS only.** The binary isn't signed or notarized yet.
+- **macOS and Windows.** The binary isn't signed or notarized yet.
 - **Chromium only.** bx speaks Chromium's DevTools Protocol, so Firefox and Safari are out.
 - **Remote debugging and Allow.** You turn on remote debugging once per
   browser, and click Allow once per browser run and after each upgrade.

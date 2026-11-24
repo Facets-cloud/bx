@@ -35,7 +35,7 @@ func TestDescribeLeavesOutTypedValues(t *testing.T) {
 }
 
 func TestHistoryGroupsSessions(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	now := time.Now()
 	writeEntry(Entry{T: now.Add(-time.Hour), Session: "mcp-a", Title: "Old task", Browser: "brave", URL: "https://www.example.com/x", Op: "click", MS: 10})
 	writeEntry(Entry{T: now.Add(-time.Minute), Session: "mcp-b", Browser: "brave", URL: "https://docs.test/a", Op: "goto", MS: 5})

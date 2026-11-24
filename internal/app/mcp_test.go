@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Facets-cloud/bx/internal/browser"
 )
 
 // mcpSession sends lines to the server and returns its replies by id.
@@ -31,10 +33,10 @@ func mcpSession(t *testing.T, lines ...string) map[string]map[string]any {
 }
 
 func TestMCPProtocol(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testHome(t)
 	t.Setenv("BX_BROWSER", "brave")
-	dir := filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser")
+	b, _ := browser.Lookup("brave")
+	dir := b.Dir()
 	os.MkdirAll(dir, 0o700)
 	os.WriteFile(filepath.Join(dir, "Local State"), []byte(`{"profile":{"info_cache":{"Default":{"name":"Work"}}}}`), 0o600)
 

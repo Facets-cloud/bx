@@ -92,7 +92,7 @@ func TestFollows(t *testing.T) {
 }
 
 func TestHowToWork(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testHome(t)
 	for _, k := range []string{"BX_MODE", "BX_PACE", "BX_TYPING", "BX_FOLLOW"} {
 		t.Setenv(k, "")
 	}
