@@ -202,12 +202,31 @@ func (sess *tabSession) labeller() func(ref string) string {
 		if !at.shared {
 			return at.base()
 		}
-		label, err := placeLabel(at, sess.matchesByName(sess.ctx, at.role, at.name, 0))
-		if err != nil {
-			return at.base() + unreplayable
-		}
-		return label
+		return shareLabel(sess.ctx, labelWait, at, func(ctx context.Context) []nodeKey {
+			return sess.matchesByName(ctx, at.role, at.name, 0)
+		})
 	}
+}
+
+// labelWait bounds the page query that places a shared name. Labelling runs
+// before every request, so a page that cannot answer (an alert open) must not
+// hold the request.
+const labelWait = 5 * time.Second
+
+// shareLabel is the label of a shared name, its place found by match within
+// wait. A query that times out or places nothing gives the unreplayable label.
+func shareLabel(ctx context.Context, wait time.Duration, at refAt, match func(context.Context) []nodeKey) string {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	keys := match(ctx)
+	if ctx.Err() != nil {
+		return at.base() + unreplayable
+	}
+	label, err := placeLabel(at, keys)
+	if err != nil {
+		return at.base() + unreplayable
+	}
+	return label
 }
 
 // unreplayable marks a label a replay cannot find; see labeller.

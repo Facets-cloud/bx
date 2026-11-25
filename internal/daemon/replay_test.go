@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 )
@@ -337,5 +339,25 @@ func TestPinAcrossTabsRefused(t *testing.T) {
 		{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Save"`}}}}}
 	if err := refuseUnreplayable(one.Steps()); err != nil {
 		t.Fatalf("a one-tab pin was refused: %v", err)
+	}
+}
+
+// A shared name is labelled by its place among the page's elements with that
+// name. A page query that never answers gives the unreplayable label within
+// the wait, so labelling cannot hold a request.
+func TestShareLabelDeadline(t *testing.T) {
+	at := refAt{role: "textbox", name: "Email", shared: true}
+	found := func(context.Context) []nodeKey { return []nodeKey{{}} }
+	if got := shareLabel(context.Background(), time.Second, at, found); got != `textbox "Email" #1` {
+		t.Fatalf("placed: got %q", got)
+	}
+	hang := func(ctx context.Context) []nodeKey { <-ctx.Done(); return nil }
+	began := time.Now()
+	got := shareLabel(context.Background(), 50*time.Millisecond, at, hang)
+	if got != `textbox "Email"`+unreplayable {
+		t.Fatalf("timed out: got %q, want the unreplayable label", got)
+	}
+	if d := time.Since(began); d > 2*time.Second {
+		t.Fatalf("labelling took %s past its wait", d)
 	}
 }
