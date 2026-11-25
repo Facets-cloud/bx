@@ -26,6 +26,14 @@ type Step struct {
 	Input string `json:"input,omitempty"`
 }
 
+// failureStep is the failed step as a report shows it: as recordStep keeps
+// it, plus the input slot it reads (so the agent knows which value to fix).
+func failureStep(st Step, names map[string]string) Step {
+	rec := recordStep(st, names)
+	rec.Input = st.Input
+	return rec
+}
+
 // recordStep is st as the log and a pin keep it: the element by the name an
 // agent can use again (names maps refs as of the latest snapshot), a page's
 // URL without its query, and no typed value or input slot. A wait's Text is
@@ -92,7 +100,8 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 		rec := recordStep(st, names)
 		r, err := s.step(id, st, timeout)
 		if err != nil {
-			res.Failed, res.Error, res.FailedStep = &i, err.Error(), &rec
+			failed := failureStep(st, names)
+			res.Failed, res.Error, res.FailedStep = &i, err.Error(), &failed
 			return res, nil
 		}
 		res.Recorded = append(res.Recorded, rec)

@@ -188,7 +188,13 @@ func (s *server) runPin(id, name string, values map[string]string, timeout time.
 	}
 	out := RunResult{Pin: p.Name, BatchResult: res}
 	if res.Failed != nil {
-		if snap, err := s.snapshot(id, timeout); err == nil {
+		snap, err := s.snapshot(id, timeout)
+		if err == nil {
+			snap, err = snap.Filter("", true)
+		}
+		if err != nil {
+			out.Page = "(page snapshot failed: " + err.Error() + ")"
+		} else {
 			out.Page = snap.Text()
 		}
 	}

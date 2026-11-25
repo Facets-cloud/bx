@@ -156,6 +156,17 @@ func TestDuplicateNameRoundTrip(t *testing.T) {
 	}
 }
 
+// The failure report carries the failed step with its typed value removed
+// and the input slot it reads, so a report never echoes what was typed.
+func TestFailedStepReportHasNoValue(t *testing.T) {
+	names := map[string]string{"e4": `textbox "Email"`}
+	st := Step{Action: "fill", Element: "e4", Value: "hunter2", Input: "textbox-email"}
+	rec := failureStep(st, names)
+	if rec.Value != "" || rec.Element != `textbox "Email"` || rec.Input != "textbox-email" {
+		t.Fatalf("failed step report: got %+v", rec)
+	}
+}
+
 // A wait the agent ran is recorded as an expect step: its text or element is
 // kept, and the element is named the way a replay can find it again.
 func TestLoggedWaitIsAnExpectStep(t *testing.T) {
