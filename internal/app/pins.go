@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -166,6 +167,37 @@ func cmdPinned(e env) error {
 	return nil
 }
 
+// cmdRun is bx run <tab> <pin name> [--set <input>=<value> ...]: replays a
+// saved pin on a tab. Its inputs are the values the user gave, never logged.
+func cmdRun(e env) error {
+	if len(e.pos) < 2 {
+		return exit.New(exit.Validation, `usage: bx run <tab> <pin name> [--set <input>=<value> ...]`)
+	}
+	values := map[string]string{}
+	for _, s := range e.a.sets {
+		k, v, ok := strings.Cut(s, "=")
+		if !ok || k == "" {
+			return exit.New(exit.Validation, "--set takes <input>=<value>, got %q", s)
+		}
+		values[k] = v
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(values)
+	var res daemon.RunResult
+	if err := e.call("run", map[string]string{"tab": e.pos[0], "pin": strings.Join(e.pos[1:], " "),
+		"values": string(body), "timeout": t}, &res); err != nil {
+		return err
+	}
+	e.o.printJSON(res)
+	if res.Failed != nil {
+		return exit.New(exit.User, "step %d failed: %s", *res.Failed+1, res.Error)
+	}
+	return nil
+}
+
 // cmdUnpin is bx history unpin <name>.
 func cmdUnpin(e env) error {
 	if len(e.pos) < 2 {
@@ -207,6 +239,16 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 			return mcpContent{}, err
 		}
 		return mcpContent{text: "unpinned " + name}, nil
+	case "run":
+		if name == "" {
+			return mcpContent{}, exit.New(exit.Validation, "run needs a pin name and a tab")
+		}
+		values, err := json.Marshal(args["values"])
+		if err != nil {
+			return mcpContent{}, exit.New(exit.Validation, "run: values must be an object of input name to value")
+		}
+		return daemonCall(args, "run", map[string]string{"tab": argString(args, "tab"), "pin": name,
+			"values": string(values), "timeout": orDefault(argString(args, "timeout"), "30s")})
 	}
 	ps, err := daemon.ListPins()
 	if err != nil {

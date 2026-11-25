@@ -407,8 +407,9 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 	found := 0
 	for {
 		keys := sess.matchesByName(wctx, role, name, nth)
-		if found = len(keys); found >= nth {
-			return keys[nth-1], nil
+		found = len(keys)
+		if k, ok := pickNth(keys, nth); ok {
+			return k, nil
 		}
 		select {
 		case <-wctx.Done():
@@ -419,6 +420,15 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
+}
+
+// pickNth is the element numbered nth among keys, in the order matchesByName
+// lists them; ok is false when there are fewer.
+func pickNth(keys []nodeKey, nth int) (k nodeKey, ok bool) {
+	if nth < 1 || nth > len(keys) {
+		return nodeKey{}, false
+	}
+	return keys[nth-1], true
 }
 
 // matchesByName lists the elements with this role and name in the order

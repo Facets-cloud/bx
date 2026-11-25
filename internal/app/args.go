@@ -17,6 +17,7 @@ var valueFlags = map[string]string{
 	"--text": "text", "--submit": "submit", "--file": "file", "--name": "name", "--status": "status", "--body": "body", "--type": "type",
 	"--since": "since", "--limit": "limit", "--task": "task", "--request": "request", "--frame": "frame",
 	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",
+	"--set": "set",
 }
 
 var boolFlags = map[string]string{
@@ -31,6 +32,7 @@ var boolFlags = map[string]string{
 type args struct {
 	pos   []string
 	flags map[string]string
+	sets  []string // every --set, in order: it may repeat
 }
 
 func parseArgs(in []string) (args, error) {
@@ -60,6 +62,10 @@ func parseArgs(in []string) (args, error) {
 			}
 			i++
 			val = in[i]
+		}
+		if canon == "set" {
+			a.sets = append(a.sets, val)
+			continue
 		}
 		a.flags[canon] = val
 	}

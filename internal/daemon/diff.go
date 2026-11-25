@@ -141,6 +141,15 @@ func look(n SnapNode) string {
 // among them (textbox "Email" #2). The places come from matchesByName, the
 // list findByName numbers from, so a saved #k finds the same element on replay.
 func (sess *tabSession) nameRefs(ctx context.Context, nodes []SnapNode, refs refState) map[string]string {
+	return labelRefs(nodes, refs, func(role, name string) []nodeKey {
+		return sess.matchesByName(ctx, role, name, 0)
+	})
+}
+
+// labelRefs is nameRefs with the elements of a role and name supplied by
+// keysFor, in the order the resolver numbers them, so the labels can be
+// tested on a fixed page.
+func labelRefs(nodes []SnapNode, refs refState, keysFor func(role, name string) []nodeKey) map[string]string {
 	total := map[string]int{}
 	for _, n := range nodes {
 		if n.Ref != "" && n.Name != "" {
@@ -161,7 +170,7 @@ func (sess *tabSession) nameRefs(ctx context.Context, nodes []SnapNode, refs ref
 		if n.Name != "" && total[k] > 1 {
 			keys, ok := matches[k]
 			if !ok {
-				keys = sess.matchesByName(ctx, n.Role, n.Name, 0)
+				keys = keysFor(n.Role, n.Name)
 				matches[k] = keys
 			}
 			mine := nodeKey{refs.in[n.Ref], refs.refs[n.Ref]}
