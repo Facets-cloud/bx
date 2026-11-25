@@ -361,3 +361,27 @@ func TestShareLabelDeadline(t *testing.T) {
 		t.Fatalf("labelling took %s past its wait", d)
 	}
 }
+
+// A typed character is an input slot, never kept; a named key is kept as
+// given. The log names only how many characters were typed.
+func TestTypedKeyIsInputSlot(t *testing.T) {
+	r := rec(false, nil)
+	typed := r.recordStep(Step{Action: "key", Key: "s"})
+	if typed.Key != "" || typed.Input != "key" {
+		t.Fatalf("typed key: got %+v, want an input slot with no key", typed)
+	}
+	if named := r.recordStep(Step{Action: "key", Key: "Enter"}); named.Key != "Enter" || named.Input != "" {
+		t.Fatalf("named key: got %+v", named)
+	}
+	steps := []Step{typed}
+	if _, err := bindValues(steps, map[string]string{"key": "ab"}); err == nil {
+		t.Fatal("a two-character value for a key input was accepted")
+	}
+	bound, err := bindValues(steps, map[string]string{"key": "x"})
+	if err != nil || bound[0].Key != "x" {
+		t.Fatalf("bind: %+v %v", bound, err)
+	}
+	if got := describe("key", map[string]string{"keys": "s"}, false, nil); got != "key (1 chars)" {
+		t.Fatalf("log of a typed key: %q", got)
+	}
+}

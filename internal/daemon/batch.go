@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Facets-cloud/bx/internal/exit"
 )
@@ -60,6 +62,11 @@ func (r stepRecorder) recordStep(st Step) Step {
 	rec := Step{Action: st.Action, Element: r.label(st.Element), Submit: st.Submit, Key: st.Key,
 		Double: st.Double, Gone: st.Gone}
 	switch st.Action {
+	case "key":
+		// A single printable key is typed text: it is an input slot, like a fill.
+		if typedKey(st.Key) {
+			rec.Key, rec.Input = "", "key"
+		}
 	case "wait":
 		rec.Text = st.Text
 	case "goto":
@@ -70,6 +77,14 @@ func (r stepRecorder) recordStep(st Step) Step {
 		rec.Input = "file"
 	}
 	return rec
+}
+
+// typedKey is a key that types one printable character (a letter, a digit,
+// a space): what an agent types one key at a time. Named keys (Enter, Tab,
+// Control+a) are not typed text.
+func typedKey(k string) bool {
+	r, n := utf8.DecodeRuneInString(k)
+	return n > 0 && n == len(k) && unicode.IsPrint(r)
 }
 
 // url is the URL a goto step keeps and its input slot, if any.

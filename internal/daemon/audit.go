@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/target"
 )
@@ -208,6 +209,9 @@ func describe(op string, a map[string]string, full bool, names map[string]refAt)
 	case "eval":
 		return secret("script", a["script"])
 	case "key":
+		if !full && typedKey(a["keys"]) {
+			return secret("key", a["keys"])
+		}
 		return a["keys"]
 	case "drag":
 		return named(a["from"], names) + " -> " + named(a["to"], names)
@@ -337,7 +341,11 @@ func describeBatch(steps string, full bool, names map[string]refAt) string {
 				d += " " + cleanURL(st.URL)
 			}
 		case "key":
-			d += " " + st.Key
+			if !full && typedKey(st.Key) {
+				d += fmt.Sprintf(" (%d chars)", utf8.RuneCountInString(st.Key))
+			} else {
+				d += " " + st.Key
+			}
 		default:
 			if st.Element != "" {
 				d += " " + named(st.Element, names)

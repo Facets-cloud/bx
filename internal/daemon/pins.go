@@ -147,7 +147,7 @@ func needsInput(st Step) bool {
 	switch st.Action {
 	case "fill", "type", "upload":
 		return true
-	case "goto":
+	case "goto", "key":
 		return st.Input != ""
 	}
 	return false
@@ -203,6 +203,11 @@ func bindValues(steps []Step, values map[string]string) ([]Step, error) {
 			out[i].Files = []string{v}
 		case "goto":
 			out[i].URL = v
+		case "key":
+			if !typedKey(v) {
+				return nil, exit.New(exit.Validation, "input %s takes one printable character, not %q", st.Input, v)
+			}
+			out[i].Key = v
 		}
 	}
 	if len(unknown) > 0 {
