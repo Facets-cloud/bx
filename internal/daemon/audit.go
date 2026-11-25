@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -260,32 +261,50 @@ func loggedSteps(req Request, res any) []Step {
 	return req.steps
 }
 
+// ReadOnly ops look at a page without changing it: a pin leaves them out. It
+// is the one list of such ops.
+var ReadOnly = map[string]bool{"snapshot": true, "read": true, "screenshot": true, "console": true,
+	"network": true, "storage": true, "performance": true, "emulate": true, "cdp": true, "record-start": true, "record-stop": true}
+
 // planSteps is what a request does as replayable steps, its elements labelled
-// now, before it runs, from the snapshot the request saw. Ops that cannot be
-// replayed plan nothing.
-func planSteps(req Request, label func(ref string) string) []Step {
+// now, before it runs, from the snapshot the request saw. A page-changing op
+// with no step form plans one unreplayable step, so a pin refuses it instead
+// of skipping it and reporting success.
+func planSteps(req Request, r stepRecorder) []Step {
 	a := req.Args
 	switch req.Op {
-	case "click", "hover":
-		return []Step{recordStep(Step{Action: req.Op, Element: a["selector"]}, label)}
+	case "click":
+		return []Step{r.recordStep(Step{Action: "click", Element: a["selector"], Double: a["double"] == "true"})}
+	case "hover":
+		return []Step{r.recordStep(Step{Action: "hover", Element: a["selector"]})}
 	case "type":
-		return []Step{recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]}, label)}
+		return []Step{r.recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]})}
 	case "fill":
 		var pairs [][2]string
 		_ = json.Unmarshal([]byte(a["pairs"]), &pairs)
 		var out []Step
 		for _, p := range pairs {
-			out = append(out, recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}, label))
+			out = append(out, r.recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}))
 		}
 		return out
 	case "key":
-		return []Step{{Action: "key", Key: a["keys"]}}
+		return []Step{r.recordStep(Step{Action: "key", Key: a["keys"]})}
 	case "wait":
-		return []Step{recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"}, label)}
+		return []Step{r.recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"})}
 	case "goto", "open":
-		return []Step{recordStep(Step{Action: "goto", URL: a["url"]}, label)}
+		return []Step{r.recordStep(Step{Action: "goto", URL: a["url"]})}
+	case "upload":
+		var files []string
+		_ = json.Unmarshal([]byte(a["files"]), &files)
+		if len(files) != 1 {
+			return []Step{{Action: "upload", Unreplayable: "upload of " + strconv.Itoa(len(files)) + " files"}}
+		}
+		return []Step{r.recordStep(Step{Action: "upload", Element: a["selector"]})}
 	}
-	return nil
+	if a["tab"] == "" || unlogged[req.Op] || ReadOnly[req.Op] {
+		return nil
+	}
+	return []Step{{Action: req.Op, Unreplayable: req.Op}}
 }
 
 func describeFill(pairs string, full bool, names map[string]refAt) string {

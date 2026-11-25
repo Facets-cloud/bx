@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Facets-cloud/bx/internal/exit"
@@ -21,36 +22,63 @@ type Step struct {
 	Double  bool     `json:"double,omitempty"`
 	Gone    bool     `json:"gone,omitempty"`
 	Files   []string `json:"files,omitempty"`
+	// Unreplayable names a page-changing op a pin cannot repeat (see
+	// planSteps); a replay refuses it.
+	Unreplayable string `json:"unreplayable,omitempty"`
 	// Input names the pin input that a fill or type step takes its value
 	// from (see daemon.Pin). bx run sets Value or Text from it.
 	Input string `json:"input,omitempty"`
 }
 
+// stepRecorder turns the steps a request ran into what the log and pins keep.
+// label resolves an element ref to its label (see labeller); full is the
+// log.values full setting, which keeps URLs whole.
+type stepRecorder struct {
+	label func(ref string) string
+	full  bool
+}
+
 // failureStep is the failed step as a report shows it: as recordStep keeps
-// it, plus the input slot it reads (so the agent knows which value to fix).
-func failureStep(st Step, label func(ref string) string) Step {
-	rec := recordStep(st, label)
-	rec.Input = st.Input
+// it, plus the input slot the step reads, so the agent knows which value to
+// fix.
+func (r stepRecorder) failureStep(st Step) Step {
+	rec := r.recordStep(st)
+	if st.Input != "" {
+		rec.Input = st.Input
+	}
 	return rec
 }
 
-// recordStep is st as the log and a pin keep it: the element by the name an
-// agent can use again (label resolves a ref to its label, see stepLabel), a
-// page's URL without its query, and no typed value or input slot. A wait's
-// Text is the text it waits for, so it stays.
-func recordStep(st Step, label func(ref string) string) Step {
-	rec := st
-	rec.Element = label(st.Element)
-	rec.Input = ""
+// recordStep is st as the log and a pin keep it. It is an allowlist: the
+// element by its label, the step's options, and nothing typed. A wait keeps
+// its Text, the text it waits for. A typed value (Value, Text of a type step,
+// upload Files) is never kept; a fill, type or upload step records an input
+// slot that SavePin names. A goto URL is kept whole under log.values full,
+// and otherwise kept only when it has nothing to strip; a URL that would be
+// stripped (query, fragment, user info) becomes the input slot "url".
+func (r stepRecorder) recordStep(st Step) Step {
+	rec := Step{Action: st.Action, Element: r.label(st.Element), Submit: st.Submit, Key: st.Key,
+		Double: st.Double, Gone: st.Gone}
 	switch st.Action {
-	case "fill":
-		rec.Value = ""
-	case "type":
-		rec.Text = ""
+	case "wait":
+		rec.Text = st.Text
 	case "goto":
-		rec.URL = cleanURL(st.URL)
+		rec.URL, rec.Input = r.url(st.URL)
+	case "fill", "type":
+		// the input name is set when the pin is saved (withInputs)
+	case "upload":
+		rec.Input = "file"
 	}
 	return rec
+}
+
+// url is the URL a goto step keeps and its input slot, if any.
+func (r stepRecorder) url(raw string) (string, string) {
+	// A fragment can carry a token (OAuth implicit flow), and cleanURL keeps it.
+	if r.full || cleanURL(raw) == raw && !strings.Contains(raw, "#") {
+		return raw, ""
+	}
+	return "", "url"
 }
 
 // BatchResult says how many steps ran and where the tab ended up. On a
@@ -88,6 +116,7 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 	if err != nil {
 		return BatchResult{}, err
 	}
+	full := LoadConfig().Log.values() == "full"
 	defer sess.step.Store("")
 	for i, st := range steps {
 		if i > 0 {
@@ -96,11 +125,11 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 		sess.step.Store(fmt.Sprintf("%d/%d", i+1, len(steps)))
 		// Refs are labelled before the step runs: its action may bring a new
 		// snapshot, and the ref it names is from the one before.
-		label := sess.labeller()
-		rec := recordStep(st, label)
+		sr := sess.recorder(full)
+		rec := sr.recordStep(st)
 		r, err := s.step(id, st, timeout)
 		if err != nil {
-			failed := failureStep(st, label)
+			failed := sr.failureStep(st)
 			res.Failed, res.Error, res.FailedStep = &i, err.Error(), &failed
 			return res, nil
 		}

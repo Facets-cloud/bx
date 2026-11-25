@@ -213,6 +213,11 @@ func (sess *tabSession) labeller() func(ref string) string {
 // unreplayable marks a label a replay cannot find; see labeller.
 const unreplayable = " (unreplayable)"
 
+// recorder is the recorder for steps run on this tab now.
+func (sess *tabSession) recorder(full bool) stepRecorder {
+	return stepRecorder{label: sess.labeller(), full: full}
+}
+
 // line renders one node the way Snapshot.Text does, without indent.
 func line(n SnapNode) string {
 	var b strings.Builder

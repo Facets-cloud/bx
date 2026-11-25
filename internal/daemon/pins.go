@@ -98,11 +98,14 @@ func withInputs(p Pin) Pin {
 		steps := slices.Clone(e.Steps)
 		for j := range steps {
 			st := &steps[j]
-			if st.Action != "fill" && st.Action != "type" {
+			if !needsInput(*st) {
 				continue
 			}
-			st.Value, st.Text = "", ""
-			base := PinSlug(st.Element)
+			st.Value, st.Text, st.Files = "", "", nil
+			base := st.Input
+			if base == "" {
+				base = PinSlug(st.Element)
+			}
 			if base == "" {
 				base = st.Action
 			}
@@ -119,8 +122,36 @@ func withInputs(p Pin) Pin {
 	return p
 }
 
-// bindValues returns steps with each fill and type step given its input's
-// value. It fails before anything runs when a value is missing or unknown.
+// needsInput is whether a step reads a value from the user on replay: a fill,
+// type or upload always does; a goto does when its URL was logged as a slot.
+func needsInput(st Step) bool {
+	switch st.Action {
+	case "fill", "type", "upload":
+		return true
+	case "goto":
+		return st.Input != ""
+	}
+	return false
+}
+
+// refuseUnreplayable fails before anything runs when a step cannot be replayed:
+// a page-changing op with no step form, or an element that has no place a
+// replay can find. It names the step by its index, as a run's failed does.
+func refuseUnreplayable(steps []Step) error {
+	for i, st := range steps {
+		if st.Unreplayable != "" {
+			return exit.New(exit.User, "step index %d (%s) cannot be replayed; finish by hand", i, st.Unreplayable)
+		}
+		if strings.HasSuffix(st.Element, unreplayable) {
+			return exit.New(exit.User, "step index %d: %s cannot be found again on replay; finish by hand", i, strings.TrimSuffix(st.Element, unreplayable))
+		}
+	}
+	return nil
+}
+
+// bindValues returns steps with each input given its value: a fill's Value, a
+// type's Text, an upload's file, a goto's URL. It fails before anything runs
+// when a value is missing or unknown.
 func bindValues(steps []Step, values map[string]string) ([]Step, error) {
 	known := map[string]bool{}
 	for _, st := range steps {
@@ -144,10 +175,15 @@ func bindValues(steps []Step, values map[string]string) ([]Step, error) {
 			missing = append(missing, st.Input)
 			continue
 		}
-		if st.Action == "fill" {
+		switch st.Action {
+		case "fill":
 			out[i].Value = v
-		} else {
+		case "type":
 			out[i].Text = v
+		case "upload":
+			out[i].Files = []string{v}
+		case "goto":
+			out[i].URL = v
 		}
 	}
 	if len(unknown) > 0 {
@@ -177,6 +213,9 @@ func (s *server) runPin(id, name string, values map[string]string, timeout time.
 	steps := p.Steps()
 	if len(steps) == 0 {
 		return RunResult{}, exit.New(exit.User, "pin %q has no steps bx can replay: pin the task again", p.Name)
+	}
+	if err := refuseUnreplayable(steps); err != nil {
+		return RunResult{}, err
 	}
 	bound, err := bindValues(steps, values)
 	if err != nil {

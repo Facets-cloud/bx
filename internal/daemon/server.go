@@ -160,7 +160,7 @@ func (s *server) handle(conn net.Conn) {
 	began, title := time.Now(), s.taskTitle(req.Args["session"])
 	req.names = s.refNames(req.Args["tab"])
 	if sess := s.liveSession(req.Args["tab"]); sess != nil {
-		req.steps = planSteps(req, sess.labeller())
+		req.steps = planSteps(req, sess.recorder(LoadConfig().Log.values() == "full"))
 	}
 	data, err := s.dispatch(req)
 	took := time.Since(began)

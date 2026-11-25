@@ -52,10 +52,6 @@ func pickTask(tasks []*task, n int) (*task, error) {
 	return tasks[len(tasks)-1], nil
 }
 
-// readOnly ops look at a page without changing it: a recipe leaves them out.
-var readOnly = map[string]bool{"snapshot": true, "read": true, "screenshot": true, "console": true,
-	"network": true, "storage": true, "performance": true, "emulate": true, "cdp": true, "record-start": true, "record-stop": true}
-
 // pinRecipe is a pin as steps an agent can follow again: the actions that
 // worked, grouped by the page they ran on.
 func pinRecipe(p daemon.Pin) string {
@@ -77,7 +73,7 @@ func pinRecipe(p daemon.Pin) string {
 	}
 	steps, skipped, page, at := 0, 0, 0, ""
 	for _, e := range p.Entries {
-		if readOnly[e.Op] || e.Error != "" {
+		if daemon.ReadOnly[e.Op] || e.Error != "" {
 			skipped++
 			continue
 		}
@@ -116,7 +112,7 @@ func pinList(ps []daemon.Pin) string {
 	for _, p := range ps {
 		n := 0
 		for _, e := range p.Entries {
-			if !readOnly[e.Op] && e.Error == "" {
+			if !daemon.ReadOnly[e.Op] && e.Error == "" {
 				n += len(recipeSteps(e))
 			}
 		}
@@ -201,9 +197,31 @@ func cmdRun(e env) error {
 	}
 	e.o.printJSON(res)
 	if res.Failed != nil {
-		return exit.New(exit.User, "step %d failed: %s", *res.Failed+1, res.Error)
+		return exit.New(exit.User, "step index %d failed: %s", *res.Failed, res.Error)
 	}
 	return nil
+}
+
+// runValues is the MCP values object as the input name to value map a run
+// takes. A value may be text, a number or a boolean; a nested object or list
+// is refused.
+func runValues(v any) (map[string]string, error) {
+	out := map[string]string{}
+	if v == nil {
+		return out, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, exit.New(exit.Validation, "run: values must be an object of input name to value")
+	}
+	for k, x := range m {
+		switch x.(type) {
+		case map[string]any, []any:
+			return nil, exit.New(exit.Validation, "run: the value for %s must be text, a number or true/false", k)
+		}
+		out[k] = argString(m, k)
+	}
+	return out, nil
 }
 
 // cmdUnpin is bx history unpin <name>.
@@ -248,15 +266,16 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 		}
 		return mcpContent{text: "unpinned " + name}, nil
 	case "run":
-		if name == "" {
+		if name == "" || argString(args, "tab") == "" {
 			return mcpContent{}, exit.New(exit.Validation, "run needs a pin name and a tab")
 		}
-		values, err := json.Marshal(args["values"])
+		values, err := runValues(args["values"])
 		if err != nil {
-			return mcpContent{}, exit.New(exit.Validation, "run: values must be an object of input name to value")
+			return mcpContent{}, err
 		}
+		body, _ := json.Marshal(values)
 		return daemonCall(args, "run", map[string]string{"tab": argString(args, "tab"), "pin": name,
-			"values": string(values), "timeout": orDefault(argString(args, "timeout"), "30s")})
+			"values": string(body), "timeout": orDefault(argString(args, "timeout"), "30s")})
 	}
 	ps, err := daemon.ListPins()
 	if err != nil {
