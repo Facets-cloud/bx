@@ -105,9 +105,22 @@ func (p Pin) Inputs() []PinInput {
 
 // withInputs scrubs the typed values from a pin's steps and names each fill
 // and type step's input: its element's slug (textbox-email), with -2, -3 for
-// repeats, so each step asks for its own value.
-func withInputs(p Pin) Pin {
+// repeats, so each step asks for its own value. prev is the pin p replaces, if
+// any: an input of the same kind (see inputKind) keeps its old name, in the
+// order the inputs appear, so a --set by that name still works after a label
+// changed. It returns the renames, "input <new> kept as <old>".
+func withInputs(p, prev Pin) (Pin, []string) {
+	prior := map[string][]string{}
+	for _, e := range prev.Entries {
+		for _, st := range e.Steps {
+			if needsInput(st) {
+				k := inputKind(st)
+				prior[k] = append(prior[k], st.Input)
+			}
+		}
+	}
 	used := map[string]bool{}
+	var renames []string
 	entries := make([]Entry, len(p.Entries))
 	for i, e := range p.Entries {
 		entries[i] = e
@@ -128,9 +141,19 @@ func withInputs(p Pin) Pin {
 			if base == "" {
 				base = st.Action
 			}
-			name := base
-			for n := 2; used[name]; n++ {
-				name = fmt.Sprintf("%s-%d", base, n)
+			fresh := base
+			for n := 2; used[fresh]; n++ {
+				fresh = fmt.Sprintf("%s-%d", base, n)
+			}
+			name := fresh
+			if old := prior[inputKind(*st)]; len(old) > 0 {
+				prior[inputKind(*st)] = old[1:]
+				if !used[old[0]] {
+					name = old[0]
+				}
+			}
+			if name != fresh {
+				renames = append(renames, fmt.Sprintf("input %s kept as %s", fresh, name))
 			}
 			used[name] = true
 			st.Input = name
@@ -138,7 +161,14 @@ func withInputs(p Pin) Pin {
 		entries[i].Steps = steps
 	}
 	p.Entries = entries
-	return p
+	return p, renames
+}
+
+// inputKind is what a re-pin matches an input by: its action and its element's
+// role, so "textbox Email" and "textbox Work email" are the same kind of input.
+func inputKind(st Step) string {
+	role, _, _ := strings.Cut(st.Element, " ")
+	return st.Action + " " + role
 }
 
 // needsInput is whether a step reads a value from the user on replay: a fill,
@@ -285,18 +315,19 @@ func (s *server) runPin(id, name string, values map[string]string, from int, tim
 }
 
 // SavePin writes a pin, replacing one with the same name.
-func SavePin(p Pin) (string, error) {
+func SavePin(p Pin) (string, []string, error) {
 	p.Slug, p.V, p.Type = PinSlug(p.Name), logVersion, "pin"
 	if p.Slug == "" {
-		return "", exit.New(exit.Validation, "a pin needs a name with letters or digits")
+		return "", nil, exit.New(exit.Validation, "a pin needs a name with letters or digits")
 	}
-	p = withInputs(p)
+	prev, _ := LoadPin(p.Name) // none when there is no pin of that name yet
+	p, renames := withInputs(p, prev)
 	dir, err := pinsDir()
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var b bytes.Buffer
 	h, _ := json.Marshal(p.PinHeader)
@@ -308,9 +339,9 @@ func SavePin(p Pin) (string, error) {
 	path := filepath.Join(dir, p.Slug+".jsonl")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, b.Bytes(), 0o600); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return path, os.Rename(tmp, path)
+	return path, renames, os.Rename(tmp, path)
 }
 
 // LoadPin reads the pin with that name or slug.

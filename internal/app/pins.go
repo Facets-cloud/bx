@@ -13,28 +13,28 @@ import (
 
 // pinTask saves task n of a session (0: its last titled task, else its
 // last task) as a pin named name.
-func pinTask(ref, name string, n int) (daemon.Pin, string, error) {
+func pinTask(ref, name string, n int) (daemon.Pin, string, []string, error) {
 	list, err := daemon.ListSessions()
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	info, es, err := daemon.LoadSession(resolveSession(ref, list, daemon.CurrentSession()))
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	tasks := splitTasks(es)
 	if len(tasks) == 0 {
-		return daemon.Pin{}, "", exit.New(exit.User, "no bx activity logged for session %q (see bx history)", ref)
+		return daemon.Pin{}, "", nil, exit.New(exit.User, "no bx activity logged for session %q (see bx history)", ref)
 	}
 	t, err := pickTask(tasks, n)
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: name, Title: t.title, Session: info.ID, HSess: info.HSess,
 		Project: info.Project, Pinned: time.Now()}, Entries: t.entries}
-	path, err := daemon.SavePin(p)
+	path, renames, err := daemon.SavePin(p)
 	p.Slug = daemon.PinSlug(name)
-	return p, path, err
+	return p, path, renames, err
 }
 
 func pickTask(tasks []*task, n int) (*task, error) {
@@ -137,11 +137,14 @@ func cmdPin(e env) error {
 			return exit.New(exit.Validation, "--task takes a task number from bx history <session>")
 		}
 	}
-	p, path, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
+	p, path, renames, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
 	if err != nil {
 		return err
 	}
 	e.o.done(fmt.Sprintf("pinned %q as %s (%s)", p.Name, p.Slug, path))
+	for _, r := range renames {
+		fmt.Fprintf(e.o.w, "  %s\n", r)
+	}
 	return nil
 }
 
@@ -255,11 +258,15 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 			ref = "current"
 		}
 		n, _ := strconv.Atoi(argString(args, "task"))
-		p, _, err := pinTask(ref, name, n)
+		p, _, renames, err := pinTask(ref, name, n)
 		if err != nil {
 			return mcpContent{}, err
 		}
-		return mcpContent{text: pinRecipe(p)}, nil
+		text := pinRecipe(p)
+		for _, r := range renames {
+			text += "\n" + r
+		}
+		return mcpContent{text: text}, nil
 	case "unpin":
 		if err := daemon.Unpin(name); err != nil {
 			return mcpContent{}, err

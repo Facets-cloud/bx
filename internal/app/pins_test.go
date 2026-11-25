@@ -27,7 +27,7 @@ func TestPinRoundTripAndRecipe(t *testing.T) {
 		t.Fatalf("want the titled task, got %+v %v", task, err)
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: "Onboard vendor", Title: task.title, Session: "bx-1", Pinned: t0}, Entries: task.entries}
-	if _, err := daemon.SavePin(p); err != nil {
+	if _, _, err := daemon.SavePin(p); err != nil {
 		t.Fatal(err)
 	}
 	got, err := daemon.LoadPin("onboard vendor")

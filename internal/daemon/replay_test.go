@@ -165,7 +165,7 @@ func TestSavePinScrubsValues(t *testing.T) {
 		{Action: "type", Element: `textbox "Email"`, Text: "secret"},
 		{Action: "click", Element: `button "Next"`},
 	}}}}
-	path, err := SavePin(p)
+	path, _, err := SavePin(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,5 +416,27 @@ func TestResumeFrom(t *testing.T) {
 		if _, err := resumeFrom(steps, from); err == nil {
 			t.Fatalf("from %d accepted for a 3-step pin", from)
 		}
+	}
+}
+
+// Re-pinning after a label changed keeps the input's name, so a --set by the
+// old name still binds; the rename is reported.
+func TestRePinKeepsInputName(t *testing.T) {
+	prev, _ := withInputs(Pin{Entries: []Entry{{Steps: []Step{{Action: "fill", Element: `textbox "Email"`, Value: "a"}}}}}, Pin{})
+	p := Pin{Entries: []Entry{{Steps: []Step{
+		{Action: "fill", Element: `textbox "Work email"`, Value: "b"},
+		{Action: "click", Element: `button "Next"`},
+	}}}}
+	got, renames := withInputs(p, prev)
+	steps := got.Steps()
+	if steps[0].Input != "textbox-email" {
+		t.Fatalf("input %q, want the old name textbox-email", steps[0].Input)
+	}
+	if len(renames) != 1 || renames[0] != "input textbox-work-email kept as textbox-email" {
+		t.Fatalf("renames %q", renames)
+	}
+	bound, err := bindValues(steps, map[string]string{"textbox-email": "new"})
+	if err != nil || bound[0].Value != "new" {
+		t.Fatalf("--set by the old name: %+v %v", bound, err)
 	}
 }
