@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/target"
 )
 
 // rec is a recorder whose refs resolve to the given labels.
@@ -464,5 +465,29 @@ func TestPageCheck(t *testing.T) {
 	}
 	if msg := pageMismatch("/x", ""); msg == "" {
 		t.Fatal("an unreadable page passed a checked step")
+	}
+}
+
+// The page path comes from the browser's target list, so a dialog does not
+// block it, and a request with no planned steps reads no page at all.
+func TestPagePathSource(t *testing.T) {
+	infos := []*target.Info{{TargetID: "A", URL: "http://127.0.0.1:8000/orders/new?draft=1"}, {TargetID: "B", URL: "about:blank"}}
+	if got := urlPath(pageURL(infos, "A")); got != "/orders/new" {
+		t.Fatalf("tab A path: %q", got)
+	}
+	if got := urlPath(pageURL(infos, "C")); got != "" {
+		t.Fatalf("unlisted tab path: %q", got)
+	}
+	read := false
+	stampPath(nil, func() string { read = true; return "/x" })
+	if read {
+		t.Fatal("the page was read with no planned steps")
+	}
+	steps := []Step{{Action: "click"}, {Action: "key"}}
+	stampPath(steps, func() string { return "/orders/new" })
+	for _, st := range steps {
+		if st.Path != "/orders/new" {
+			t.Fatalf("step not stamped: %+v", st)
+		}
 	}
 }

@@ -10,6 +10,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/chromedp/cdproto/target"
+	"github.com/chromedp/chromedp"
+
 	"github.com/Facets-cloud/bx/internal/exit"
 )
 
@@ -177,13 +180,40 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 	return res, nil
 }
 
-// pagePath is the URL path of the tab's page, no query, or "" when the page
-// cannot be read within wait.
+// pagePath is the URL path of the tab's page, no query, or "" when the browser
+// does not list the tab within wait. It reads the browser's target list, not
+// the page, so it answers while a JavaScript dialog is open (Runtime.evaluate
+// does not).
 func (sess *tabSession) pagePath(wait time.Duration) string {
-	ctx, cancel := context.WithTimeout(sess.ctx, wait)
+	ctx, cancel := context.WithTimeout(sess.bctx, wait)
 	defer cancel()
-	href, _ := sess.location(ctx)
-	return urlPath(href)
+	infos, err := chromedp.Targets(ctx)
+	if err != nil {
+		return ""
+	}
+	return urlPath(pageURL(infos, sess.id))
+}
+
+// pageURL is the URL of the target id in infos, or "" when it is not listed.
+func pageURL(infos []*target.Info, id target.ID) string {
+	for _, t := range infos {
+		if t.TargetID == id {
+			return t.URL
+		}
+	}
+	return ""
+}
+
+// stampPath gives each planned step the page path it starts on. The page is
+// read only when there is a step to stamp.
+func stampPath(steps []Step, here func() string) {
+	if len(steps) == 0 {
+		return
+	}
+	p := here()
+	for i := range steps {
+		steps[i].Path = p
+	}
 }
 
 // urlPath is the path of href, no query: "" for an empty or unparsable href,

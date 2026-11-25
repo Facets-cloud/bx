@@ -165,10 +165,7 @@ func (s *server) handle(conn net.Conn) {
 		if sess := s.liveSession(req.Args["tab"]); sess != nil {
 			req.steps = planSteps(req, sess.recorder(values == "full"))
 			// A planned step starts on the page as it is now, before the request acts.
-			here := sess.pagePath(labelWait)
-			for i := range req.steps {
-				req.steps[i].Path = here
-			}
+			stampPath(req.steps, func() string { return sess.pagePath(labelWait) })
 		}
 	}
 	data, err := s.dispatch(req)
