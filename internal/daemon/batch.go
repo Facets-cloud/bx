@@ -21,6 +21,28 @@ type Step struct {
 	Double  bool     `json:"double,omitempty"`
 	Gone    bool     `json:"gone,omitempty"`
 	Files   []string `json:"files,omitempty"`
+	// Input names the pin input that a fill or type step takes its value
+	// from (see daemon.Pin). bx run sets Value or Text from it.
+	Input string `json:"input,omitempty"`
+}
+
+// recordStep is st as the log and a pin keep it: the element by the name an
+// agent can use again (names maps refs as of the latest snapshot), a page's
+// URL without its query, and no typed value or input slot. A wait's Text is
+// the text it waits for, so it stays.
+func recordStep(st Step, names map[string]string) Step {
+	rec := st
+	rec.Element = named(st.Element, names)
+	rec.Input = ""
+	switch st.Action {
+	case "fill":
+		rec.Value = ""
+	case "type":
+		rec.Text = ""
+	case "goto":
+		rec.URL = cleanURL(st.URL)
+	}
+	return rec
 }
 
 // BatchResult says how many steps ran and where the tab ended up. On a
@@ -33,6 +55,11 @@ type BatchResult struct {
 	Last   *ActResult `json:"last,omitempty"`
 	// Changes is what the whole batch changed on the page, as ActResult's.
 	Changes []string `json:"changes,omitempty"`
+	// FailedStep is the step that failed, as the log keeps it.
+	FailedStep *Step `json:"failed_step,omitempty"`
+	// Recorded is each step that ran, as the log keeps it (see recordStep).
+	// Not sent back to the caller: the log and pins read it.
+	Recorded []Step `json:"-"`
 }
 
 // batch runs steps on one tab in order, each waiting for the page to
@@ -43,6 +70,11 @@ func (s *server) batch(id, raw string, timeout time.Duration) (BatchResult, erro
 	if err := json.Unmarshal([]byte(raw), &steps); err != nil || len(steps) == 0 {
 		return BatchResult{}, exit.New(exit.Validation, "batch needs a JSON list of steps such as [{\"action\":\"click\",\"element\":\"e12\"}]")
 	}
+	return s.runSteps(id, steps, timeout)
+}
+
+// runSteps is batch for steps already decoded.
+func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (BatchResult, error) {
 	var res BatchResult
 	sess, err := s.session(id)
 	if err != nil {
@@ -54,11 +86,16 @@ func (s *server) batch(id, raw string, timeout time.Duration) (BatchResult, erro
 			sess.stepPause()
 		}
 		sess.step.Store(fmt.Sprintf("%d/%d", i+1, len(steps)))
+		// Refs are named before the step runs: its action may bring a new
+		// snapshot, and the ref it names is from the one before.
+		names, _ := sess.named.Load().(map[string]string)
+		rec := recordStep(st, names)
 		r, err := s.step(id, st, timeout)
 		if err != nil {
-			res.Failed, res.Error = &i, err.Error()
+			res.Failed, res.Error, res.FailedStep = &i, err.Error(), &rec
 			return res, nil
 		}
+		res.Recorded = append(res.Recorded, rec)
 		res.Done = i + 1
 		if r != nil {
 			res.Last = r

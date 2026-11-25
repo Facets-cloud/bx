@@ -25,13 +25,7 @@ func (sess *tabSession) takeSnapshot(ctx context.Context) (Snapshot, error) {
 	}
 	nodes, refs := buildSnapshot(tree.Nodes, prev, sess.frameTrees(ctx)...)
 	sess.refs, sess.refLoader, sess.snap = refs, loader, nodes
-	named := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		if n.Ref != "" {
-			named[n.Ref] = roleName(n)
-		}
-	}
-	sess.named.Store(named)
+	sess.named.Store(sess.nameRefs(ctx, nodes, refs))
 	url, title := sess.location(ctx)
 	return Snapshot{URL: url, Title: title, Nodes: nodes}, nil
 }
@@ -140,16 +134,50 @@ func look(n SnapNode) string {
 	return n.Role + "\x00" + n.Name + "\x00" + n.Value + "\x00" + strings.Join(n.Props, ",")
 }
 
-// line renders one node the way Snapshot.Text does, without indent.
-// roleName is an element as role and name, the way an agent can name it
-// again on another day: button "Next".
-func roleName(n SnapNode) string {
-	if n.Name == "" {
-		return n.Role
+// nameRefs maps each ref of a snapshot to the element it stood for, as the
+// log and pins name it: its role and accessible name, the way an agent can
+// name it again on another day (button "Next"). When the page holds several
+// elements with that role and name, the label carries the element's place
+// among them (textbox "Email" #2). The places come from matchesByName, the
+// list findByName numbers from, so a saved #k finds the same element on replay.
+func (sess *tabSession) nameRefs(ctx context.Context, nodes []SnapNode, refs refState) map[string]string {
+	total := map[string]int{}
+	for _, n := range nodes {
+		if n.Ref != "" && n.Name != "" {
+			total[n.Role+"\x00"+n.Name]++
+		}
 	}
-	return fmt.Sprintf("%s %q", n.Role, n.Name)
+	matches := map[string][]nodeKey{}
+	out := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		if n.Ref == "" {
+			continue
+		}
+		k := n.Role + "\x00" + n.Name
+		label := n.Role
+		if n.Name != "" {
+			label = fmt.Sprintf("%s %q", n.Role, n.Name)
+		}
+		if n.Name != "" && total[k] > 1 {
+			keys, ok := matches[k]
+			if !ok {
+				keys = sess.matchesByName(ctx, n.Role, n.Name, 0)
+				matches[k] = keys
+			}
+			mine := nodeKey{refs.in[n.Ref], refs.refs[n.Ref]}
+			for i, key := range keys {
+				if key == mine {
+					label = fmt.Sprintf("%s #%d", label, i+1)
+					break
+				}
+			}
+		}
+		out[n.Ref] = label
+	}
+	return out
 }
 
+// line renders one node the way Snapshot.Text does, without indent.
 func line(n SnapNode) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", n.Ref, n.Role)
