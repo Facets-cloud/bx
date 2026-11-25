@@ -159,8 +159,11 @@ func (s *server) handle(conn net.Conn) {
 	resp := Response{}
 	began, title := time.Now(), s.taskTitle(req.Args["session"])
 	req.names = s.refNames(req.Args["tab"])
-	if sess := s.liveSession(req.Args["tab"]); sess != nil {
-		req.steps = planSteps(req, sess.recorder(LoadConfig().Log.values() == "full"))
+	// Nothing is planned when the log keeps nothing: planning queries the page.
+	if values := LoadConfig().Log.values(); values != "off" && req.Args["session"] != "" {
+		if sess := s.liveSession(req.Args["tab"]); sess != nil {
+			req.steps = planSteps(req, sess.recorder(values == "full"))
+		}
 	}
 	data, err := s.dispatch(req)
 	took := time.Since(began)
