@@ -246,6 +246,9 @@ func (s *server) dispatch(req Request) (any, error) {
 	case BatchResult:
 		r.Changes = s.changes(a["tab"])
 		return r, nil
+	case RunResult:
+		r.Changes = s.changes(a["tab"])
+		return r, nil
 	case Downloaded:
 		r.Changes = s.changes(a["tab"])
 		return r, nil
@@ -283,6 +286,14 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.typeText(id, a["selector"], a["text"], a["submit"], t)
 	case "batch":
 		return s.batch(id, a["steps"], t)
+	case "run":
+		var values map[string]string
+		if v := a["values"]; v != "" {
+			if err := json.Unmarshal([]byte(v), &values); err != nil {
+				return nil, exit.New(exit.Validation, "run: values must be a JSON object of input name to value")
+			}
+		}
+		return s.runPin(id, a["pin"], values, t)
 	case "key":
 		return s.key(id, a["keys"], t)
 	case "upload":

@@ -44,8 +44,12 @@ type Entry struct {
 	To      string `json:"to,omitempty"`  // the page it led to, when that changed
 	Op      string `json:"op"`
 	Target  string `json:"target,omitempty"`
-	Error   string `json:"error,omitempty"`
-	MS      int64  `json:"ms"`
+	// Steps is the action as bx run replays it: elements by the name an agent
+	// can use again, no typed values (see recordStep). Empty when the op
+	// cannot be replayed.
+	Steps []Step `json:"steps,omitempty"`
+	Error string `json:"error,omitempty"`
+	MS    int64  `json:"ms"`
 }
 
 // unlogged ops say nothing about what an agent did to a page.
@@ -83,6 +87,8 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 		Tab: a["tab"], Op: req.Op, Target: describe(req.Op, a, values == "full", req.names), MS: took.Milliseconds()}
 	if err != nil {
 		e.Error = errorResponse(err).Error
+	} else {
+		e.Steps = loggedSteps(req, res)
 	}
 	if tab, ok := res.(Tab); ok { // open
 		e.Tab = string(tab.ID)
@@ -228,8 +234,42 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 		return a["request"]
 	case "record-start":
 		return a["dir"]
+	case "run":
+		return a["pin"]
 	}
 	return ""
+}
+
+// loggedSteps is what a successful request did as steps bx run can replay.
+// Batches and runs report their steps as they ran; a single element action
+// is one step. Other ops leave nothing to replay.
+func loggedSteps(req Request, res any) []Step {
+	switch r := res.(type) {
+	case BatchResult:
+		return r.Recorded
+	case RunResult:
+		return r.Recorded
+	}
+	a, names := req.Args, req.names
+	switch req.Op {
+	case "click", "hover":
+		return []Step{recordStep(Step{Action: req.Op, Element: a["selector"]}, names)}
+	case "type":
+		return []Step{recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]}, names)}
+	case "fill":
+		var pairs [][2]string
+		_ = json.Unmarshal([]byte(a["pairs"]), &pairs)
+		var out []Step
+		for _, p := range pairs {
+			out = append(out, recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}, names))
+		}
+		return out
+	case "key":
+		return []Step{{Action: "key", Key: a["keys"]}}
+	case "goto", "open":
+		return []Step{recordStep(Step{Action: "goto", URL: a["url"]}, names)}
+	}
+	return nil
 }
 
 func describeFill(pairs string, full bool, names map[string]string) string {

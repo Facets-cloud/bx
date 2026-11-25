@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -53,12 +55,153 @@ func PinSlug(name string) string {
 	return strings.Trim(notSlug.ReplaceAllString(strings.ToLower(name), "-"), "-")
 }
 
+// Pin inputs. A fill or type step's value is never kept: the pin names it an
+// input instead, and bx run takes the value for each input from the user.
+
+// PinInput is one value a pin needs, and the element it goes into.
+type PinInput struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// Steps is the pin's steps in order, as bx run replays them.
+func (p Pin) Steps() []Step {
+	var out []Step
+	for _, e := range p.Entries {
+		out = append(out, e.Steps...)
+	}
+	return out
+}
+
+// Inputs is the values the pin needs, in the order its steps use them.
+func (p Pin) Inputs() []PinInput {
+	var out []PinInput
+	for _, st := range p.Steps() {
+		if st.Input != "" {
+			out = append(out, PinInput{Name: st.Input, Label: st.Action + " " + st.Element})
+		}
+	}
+	return out
+}
+
+// withInputs scrubs the typed values from a pin's steps and names each fill
+// and type step's input: its element's slug (textbox-email), with -2, -3 for
+// repeats, so each step asks for its own value.
+func withInputs(p Pin) Pin {
+	used := map[string]bool{}
+	entries := make([]Entry, len(p.Entries))
+	for i, e := range p.Entries {
+		entries[i] = e
+		if len(e.Steps) == 0 {
+			continue
+		}
+		steps := slices.Clone(e.Steps)
+		for j := range steps {
+			st := &steps[j]
+			if st.Action != "fill" && st.Action != "type" {
+				continue
+			}
+			st.Value, st.Text = "", ""
+			base := PinSlug(st.Element)
+			if base == "" {
+				base = st.Action
+			}
+			name := base
+			for n := 2; used[name]; n++ {
+				name = fmt.Sprintf("%s-%d", base, n)
+			}
+			used[name] = true
+			st.Input = name
+		}
+		entries[i].Steps = steps
+	}
+	p.Entries = entries
+	return p
+}
+
+// bindValues returns steps with each fill and type step given its input's
+// value. It fails before anything runs when a value is missing or unknown.
+func bindValues(steps []Step, values map[string]string) ([]Step, error) {
+	known := map[string]bool{}
+	for _, st := range steps {
+		if st.Input != "" {
+			known[st.Input] = true
+		}
+	}
+	var unknown, missing []string
+	for k := range values {
+		if !known[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	out := slices.Clone(steps)
+	for i, st := range out {
+		if st.Input == "" {
+			continue
+		}
+		v, ok := values[st.Input]
+		if !ok {
+			missing = append(missing, st.Input)
+			continue
+		}
+		if st.Action == "fill" {
+			out[i].Value = v
+		} else {
+			out[i].Text = v
+		}
+	}
+	if len(unknown) > 0 {
+		slices.Sort(unknown)
+		return nil, exit.New(exit.Validation, "this pin has no input named %s", strings.Join(unknown, ", "))
+	}
+	if len(missing) > 0 {
+		return nil, exit.New(exit.Validation, "the pin needs a value for each input: %s (give them with --set name=value)", strings.Join(missing, ", "))
+	}
+	return out, nil
+}
+
+// RunResult is a pin replayed on one tab: how far it got, as a batch's
+// result, and the page as it stands when a step failed.
+type RunResult struct {
+	Pin  string `json:"pin"`
+	Page string `json:"page,omitempty"`
+	BatchResult
+}
+
+// runPin replays a pin's steps on a tab, with the values for its inputs.
+func (s *server) runPin(id, name string, values map[string]string, timeout time.Duration) (RunResult, error) {
+	p, err := LoadPin(name)
+	if err != nil {
+		return RunResult{}, err
+	}
+	steps := p.Steps()
+	if len(steps) == 0 {
+		return RunResult{}, exit.New(exit.User, "pin %q has no steps bx can replay: pin the task again", p.Name)
+	}
+	bound, err := bindValues(steps, values)
+	if err != nil {
+		return RunResult{}, err
+	}
+	res, err := s.runSteps(id, bound, timeout)
+	if err != nil {
+		return RunResult{}, err
+	}
+	out := RunResult{Pin: p.Name, BatchResult: res}
+	if res.Failed != nil {
+		if snap, err := s.snapshot(id, timeout); err == nil {
+			out.Page = snap.Text()
+		}
+	}
+	return out, nil
+}
+
 // SavePin writes a pin, replacing one with the same name.
 func SavePin(p Pin) (string, error) {
 	p.Slug, p.V, p.Type = PinSlug(p.Name), logVersion, "pin"
 	if p.Slug == "" {
 		return "", exit.New(exit.Validation, "a pin needs a name with letters or digits")
 	}
+	p = withInputs(p)
 	dir, err := pinsDir()
 	if err != nil {
 		return "", err
