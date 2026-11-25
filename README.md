@@ -402,8 +402,9 @@ and the agent reads its inputs, asks you for each value (values were never
 logged), and replays the steps with `bx run`. A pin keeps each typed field as
 an input such as `textbox-email`, and each repeat of the same field gets its
 own (`textbox-email-2`), so a form that asks for the same thing twice gets two
-values. `bx run` checks every input is given before it touches the page, and
-stops at the first failed step, returning the page as it stands. `failed` is
+values. `bx run` checks every input the steps it runs use is given before it
+touches the page, and stops at the first failed step, returning the page as it
+stands. `failed` is
 the 0-based step index, as `bx batch` reports it. A step bx cannot repeat (eval,
 drag, a mouse action, a multi-file upload) is refused before anything runs: finish
 it by hand and pin again. An upload's file and a URL with a query or fragment are
@@ -416,6 +417,19 @@ and on yes pins it. If a run failed and the flow was finished by hand, it offers
 to re-pin under the same name; the new pin replaces the old one, so the next
 run is clean. A `wait` step in a flow replays as an expect step, so a run
 reports whether that text or element appeared.
+
+Resume a run from a step with `bx run <tab> "<pin>" --from N` (MCP: `from`),
+where N is the index a failed run names. Steps before N are not run again. After
+a failure at N, fix step N by hand, then run with `--from N+1`. Each step records
+the path of the page it started on (no query), and a replay stops before a step
+when the page is on another path, returning the expected and actual path with the
+page as it stands; a navigating step is checked on the page it began on.
+
+Limit: a step's element is kept as `#k` when several on the page share a name, so
+`button "Save" #2` is the second one. A new element with the same name earlier on
+the page shifts `#k` silently, so the element a replay clicks can change without
+the run failing. The page check limits the damage: a page that moved stops the run,
+but one that only gained an element does not.
 
 To send the logs to Loki, Splunk, Datadog or a SIEM, point a log shipper
 such as Fluent Bit, Vector or the OpenTelemetry Collector at the sessions

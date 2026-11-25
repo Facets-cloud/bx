@@ -199,6 +199,16 @@ navigation), or the user says "again" or "every time", ask "Save this as a
 routine?" and on yes run `bx history pin current "<name>"`. A wait you ran
 (text or selector) replays as an expect step, so a run reports whether it held.
 
+Resume a failed run from its failed step with `bx run <tab> "<name>" --from N`
+(MCP: `pins` with `from`), N the 0-based index the failure names. Steps before N
+are not run again, and only the inputs of steps from N on are asked for. After
+a failure at N: fix step N by hand, then `--from N+1`. A run stops before a step
+when the page is on another path than the step recorded (its failure reads
+`expected page /x, on /y`): that is a different page, not a moved element, so
+find where the flow is before you resume. A step's element `#k` is its position
+among same-named elements, so a new element with that name earlier on the page
+shifts it without failing; check the element a replay acted on.
+
 How bx works for a task is two choices, which you make with `start` from
 what the user says. Leave out what they didn't ask for: their settings
 (`bx config`) then apply, full speed in the background unless they changed it.
