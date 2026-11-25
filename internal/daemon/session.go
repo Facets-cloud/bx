@@ -435,7 +435,7 @@ func pickNth(keys []nodeKey, nth int) (k nodeKey, ok bool) {
 // findByName numbers them: the tab's own page, then its frames in the order
 // they nest. need is how many the caller wants: frames are searched only
 // while the page has fewer (0 searches all of them). Stable names (see
-// stableLabel) are numbered from the same list, so a saved #k finds the
+// labelRefs) are numbered from the same list, so a saved #k finds the
 // element it was saved for.
 func (sess *tabSession) matchesByName(ctx context.Context, role, name string, need int) []nodeKey {
 	var keys []nodeKey
