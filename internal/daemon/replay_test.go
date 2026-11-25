@@ -440,3 +440,29 @@ func TestRePinKeepsInputName(t *testing.T) {
 		t.Fatalf("--set by the old name: %+v %v", bound, err)
 	}
 }
+
+// A replayed step runs only on the page it recorded. A step that recorded no
+// page is not checked, and a page that cannot be read fails a checked step.
+func TestPageCheck(t *testing.T) {
+	if got := urlPath("http://127.0.0.1:8000/orders/new?draft=1"); got != "/orders/new" {
+		t.Fatalf("path: %q", got)
+	}
+	if got := urlPath("about:blank"); got != "about:blank" {
+		t.Fatalf("about:blank: %q", got)
+	}
+	if got := urlPath(""); got != "" {
+		t.Fatalf("empty href: %q", got)
+	}
+	if msg := pageMismatch("", "/y"); msg != "" {
+		t.Fatalf("unrecorded page checked: %q", msg)
+	}
+	if msg := pageMismatch("/x", "/x"); msg != "" {
+		t.Fatalf("same page refused: %q", msg)
+	}
+	if msg := pageMismatch("/x", "/y"); msg != "expected page /x, on /y" {
+		t.Fatalf("wrong page: %q", msg)
+	}
+	if msg := pageMismatch("/x", ""); msg == "" {
+		t.Fatal("an unreadable page passed a checked step")
+	}
+}

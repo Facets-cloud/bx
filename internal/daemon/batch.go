@@ -1,8 +1,10 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -30,6 +32,11 @@ type Step struct {
 	// Input names the pin input that a fill or type step takes its value
 	// from (see daemon.Pin). bx run sets Value or Text from it.
 	Input string `json:"input,omitempty"`
+	// Path is the page's URL path (no query) the step started on, as recorded.
+	// A replay stops before the step when the page is not on that path (see
+	// pageMismatch). Empty when the page could not be read, or on a step that
+	// is not replayed from a pin.
+	Path string `json:"path,omitempty"`
 }
 
 // stepRecorder turns the steps a request ran into what the log and pins keep.
@@ -142,6 +149,15 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 		// snapshot, and the ref it names is from the one before.
 		sr := sess.recorder(full)
 		rec := sr.recordStep(st)
+		// The page is checked before the step acts, against the page it started
+		// on, so a step that navigates is still checked on the page it began on.
+		here := sess.pagePath(timeout)
+		if msg := pageMismatch(st.Path, here); msg != "" {
+			failed := sr.failureStep(st)
+			res.Failed, res.Error, res.FailedStep = &i, msg, &failed
+			return res, nil
+		}
+		rec.Path = here
 		r, err := s.step(id, st, timeout)
 		if err != nil {
 			failed := sr.failureStep(st)
@@ -159,6 +175,40 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 		}
 	}
 	return res, nil
+}
+
+// pagePath is the URL path of the tab's page, no query, or "" when the page
+// cannot be read within wait.
+func (sess *tabSession) pagePath(wait time.Duration) string {
+	ctx, cancel := context.WithTimeout(sess.ctx, wait)
+	defer cancel()
+	href, _ := sess.location(ctx)
+	return urlPath(href)
+}
+
+// urlPath is the path of href, no query: "" for an empty or unparsable href,
+// and the scheme and opaque part for one with no path, such as about:blank.
+func urlPath(href string) string {
+	u, err := url.Parse(href)
+	if href == "" || err != nil {
+		return ""
+	}
+	if u.Path == "" && u.Opaque != "" {
+		return u.Scheme + ":" + u.Opaque
+	}
+	return u.Path
+}
+
+// pageMismatch is why a replayed step must not run on the page here, or "" if
+// it may run: want is the path the step recorded, "" when it recorded none.
+func pageMismatch(want, here string) string {
+	if want == "" || want == here {
+		return ""
+	}
+	if here == "" {
+		return fmt.Sprintf("expected page %s, but the page could not be read", want)
+	}
+	return fmt.Sprintf("expected page %s, on %s", want, here)
 }
 
 // step runs one batch step. Wait steps report no ActResult.
