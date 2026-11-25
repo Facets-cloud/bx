@@ -64,11 +64,30 @@ type PinInput struct {
 	Label string `json:"label"`
 }
 
-// Steps is the pin's steps in order, as bx run replays them.
+// otherTab is the unreplayable marker for a step on a tab other than the
+// task's first acting tab: a replay runs every step on the one tab it is given.
+const otherTab = "acts on a second tab"
+
+// Steps is the pin's steps in order, as bx run replays them. The steps of an
+// entry on a tab other than the task's first acting tab are marked
+// unreplayable (see otherTab), so run refuses the pin before it acts.
 func (p Pin) Steps() []Step {
 	var out []Step
+	first, started := "", false
 	for _, e := range p.Entries {
-		out = append(out, e.Steps...)
+		if len(e.Steps) == 0 {
+			continue
+		}
+		if !started {
+			first, started = e.Tab, true
+		}
+		if e.Tab == first {
+			out = append(out, e.Steps...)
+			continue
+		}
+		for _, st := range e.Steps {
+			out = append(out, Step{Action: st.Action, Unreplayable: otherTab})
+		}
 	}
 	return out
 }

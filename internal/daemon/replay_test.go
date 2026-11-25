@@ -317,3 +317,25 @@ func TestCloseIsNotPlanned(t *testing.T) {
 		t.Fatalf("close plans steps: %+v", got)
 	}
 }
+
+// A pin whose task acted on a second tab cannot replay: a run puts every step
+// on the one tab it is given. Steps on the task's first acting tab still replay.
+func TestPinAcrossTabsRefused(t *testing.T) {
+	p := Pin{Entries: []Entry{
+		{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Next"`}}},
+		{Tab: "B", Steps: []Step{{Action: "click", Element: `button "Save"`}}},
+	}}
+	steps := p.Steps()
+	if len(steps) != 2 || steps[1].Unreplayable != otherTab || steps[0].Unreplayable != "" {
+		t.Fatalf("steps %+v: want the second tab's step marked unreplayable", steps)
+	}
+	err := refuseUnreplayable(steps)
+	if err == nil || !strings.Contains(err.Error(), "step index 1 (acts on a second tab)") {
+		t.Fatalf("refuse: err %v", err)
+	}
+	one := Pin{Entries: []Entry{{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Next"`}}},
+		{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Save"`}}}}}
+	if err := refuseUnreplayable(one.Steps()); err != nil {
+		t.Fatalf("a one-tab pin was refused: %v", err)
+	}
+}
