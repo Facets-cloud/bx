@@ -25,7 +25,7 @@ func (sess *tabSession) takeSnapshot(ctx context.Context) (Snapshot, error) {
 	}
 	nodes, refs := buildSnapshot(tree.Nodes, prev, sess.frameTrees(ctx)...)
 	sess.refs, sess.refLoader, sess.snap = refs, loader, nodes
-	sess.named.Store(sess.nameRefs(ctx, nodes, refs))
+	sess.named.Store(refAts(nodes, refs))
 	url, title := sess.location(ctx)
 	return Snapshot{URL: url, Title: title, Nodes: nodes}, nil
 }
@@ -134,57 +134,84 @@ func look(n SnapNode) string {
 	return n.Role + "\x00" + n.Name + "\x00" + n.Value + "\x00" + strings.Join(n.Props, ",")
 }
 
-// nameRefs maps each ref of a snapshot to the element it stood for, as the
-// log and pins name it: its role and accessible name, the way an agent can
-// name it again on another day (button "Next"). When the page holds several
-// elements with that role and name, the label carries the element's place
-// among them (textbox "Email" #2). The places come from matchesByName, the
-// list findByName numbers from, so a saved #k finds the same element on replay.
-func (sess *tabSession) nameRefs(ctx context.Context, nodes []SnapNode, refs refState) map[string]string {
-	return labelRefs(nodes, refs, func(role, name string) []nodeKey {
-		return sess.matchesByName(ctx, role, name, 0)
-	})
+// refAt is an element the latest snapshot named, as the log and pins keep it.
+type refAt struct {
+	role, name string
+	key        nodeKey
+	shared     bool // the page has another element with this role and name
 }
 
-// labelRefs is nameRefs with the elements of a role and name supplied by
-// keysFor, in the order the resolver numbers them, so the labels can be
-// tested on a fixed page.
-func labelRefs(nodes []SnapNode, refs refState, keysFor func(role, name string) []nodeKey) map[string]string {
+// base is the element as role and name, the way an agent can name it again
+// on another day: button "Next".
+func (at refAt) base() string {
+	if at.name == "" {
+		return at.role
+	}
+	return fmt.Sprintf("%s %q", at.role, at.name)
+}
+
+// refAts maps each ref of a snapshot to its element. It makes no page calls:
+// the place of a shared name is looked up when a step records it (stepLabel).
+func refAts(nodes []SnapNode, refs refState) map[string]refAt {
 	total := map[string]int{}
 	for _, n := range nodes {
 		if n.Ref != "" && n.Name != "" {
 			total[n.Role+"\x00"+n.Name]++
 		}
 	}
-	matches := map[string][]nodeKey{}
-	out := make(map[string]string, len(nodes))
+	out := make(map[string]refAt, len(nodes))
 	for _, n := range nodes {
 		if n.Ref == "" {
 			continue
 		}
-		k := n.Role + "\x00" + n.Name
-		label := n.Role
-		if n.Name != "" {
-			label = fmt.Sprintf("%s %q", n.Role, n.Name)
-		}
-		if n.Name != "" && total[k] > 1 {
-			keys, ok := matches[k]
-			if !ok {
-				keys = keysFor(n.Role, n.Name)
-				matches[k] = keys
-			}
-			mine := nodeKey{refs.in[n.Ref], refs.refs[n.Ref]}
-			for i, key := range keys {
-				if key == mine {
-					label = fmt.Sprintf("%s #%d", label, i+1)
-					break
-				}
-			}
-		}
-		out[n.Ref] = label
+		out[n.Ref] = refAt{role: n.Role, name: n.Name, key: nodeKey{refs.in[n.Ref], refs.refs[n.Ref]},
+			shared: n.Name != "" && total[n.Role+"\x00"+n.Name] > 1}
 	}
 	return out
 }
+
+// placeLabel is at as a label, with its place among the page's elements of its
+// role and name when the name is shared: textbox "Email" #2. keys lists those
+// elements in the order findByName numbers them, so the saved #k finds the same
+// one on replay. A shared name whose element is not in keys has no label a
+// replay can find: that is an error, never a guess at the first match.
+func placeLabel(at refAt, keys []nodeKey) (string, error) {
+	if !at.shared {
+		return at.base(), nil
+	}
+	for i, k := range keys {
+		if k == at.key {
+			return fmt.Sprintf("%s #%d", at.base(), i+1), nil
+		}
+	}
+	return "", fmt.Errorf("the place of %s among the %d elements the page has with that name is not known", at.base(), len(keys))
+}
+
+// labeller returns the label of a ref as the latest snapshot named it, for the
+// log and pins. A ref the snapshot did not name (a CSS selector, say) is
+// returned as given. A shared name whose place cannot be found is returned as
+// its base label with an unreplayable marker, so it is never saved as the
+// first match.
+func (sess *tabSession) labeller() func(ref string) string {
+	names, _ := sess.named.Load().(map[string]refAt)
+	return func(ref string) string {
+		at, ok := names[ref]
+		if !ok {
+			return ref
+		}
+		if !at.shared {
+			return at.base()
+		}
+		label, err := placeLabel(at, sess.matchesByName(sess.ctx, at.role, at.name, 0))
+		if err != nil {
+			return at.base() + unreplayable
+		}
+		return label
+	}
+}
+
+// unreplayable marks a label a replay cannot find; see labeller.
+const unreplayable = " (unreplayable)"
 
 // line renders one node the way Snapshot.Text does, without indent.
 func line(n SnapNode) string {

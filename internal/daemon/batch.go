@@ -28,19 +28,19 @@ type Step struct {
 
 // failureStep is the failed step as a report shows it: as recordStep keeps
 // it, plus the input slot it reads (so the agent knows which value to fix).
-func failureStep(st Step, names map[string]string) Step {
-	rec := recordStep(st, names)
+func failureStep(st Step, label func(ref string) string) Step {
+	rec := recordStep(st, label)
 	rec.Input = st.Input
 	return rec
 }
 
 // recordStep is st as the log and a pin keep it: the element by the name an
-// agent can use again (names maps refs as of the latest snapshot), a page's
-// URL without its query, and no typed value or input slot. A wait's Text is
-// the text it waits for, so it stays.
-func recordStep(st Step, names map[string]string) Step {
+// agent can use again (label resolves a ref to its label, see stepLabel), a
+// page's URL without its query, and no typed value or input slot. A wait's
+// Text is the text it waits for, so it stays.
+func recordStep(st Step, label func(ref string) string) Step {
 	rec := st
-	rec.Element = named(st.Element, names)
+	rec.Element = label(st.Element)
 	rec.Input = ""
 	switch st.Action {
 	case "fill":
@@ -94,13 +94,13 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 			sess.stepPause()
 		}
 		sess.step.Store(fmt.Sprintf("%d/%d", i+1, len(steps)))
-		// Refs are named before the step runs: its action may bring a new
+		// Refs are labelled before the step runs: its action may bring a new
 		// snapshot, and the ref it names is from the one before.
-		names, _ := sess.named.Load().(map[string]string)
-		rec := recordStep(st, names)
+		label := sess.labeller()
+		rec := recordStep(st, label)
 		r, err := s.step(id, st, timeout)
 		if err != nil {
-			failed := failureStep(st, names)
+			failed := failureStep(st, label)
 			res.Failed, res.Error, res.FailedStep = &i, err.Error(), &failed
 			return res, nil
 		}

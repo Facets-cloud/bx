@@ -147,31 +147,38 @@ func writeEntry(e Entry) {
 	_, _ = f.Write(append(append(out, line...), '\n'))
 }
 
-// refNames is the tab's refs as role and name, as of its latest snapshot.
-func (s *server) refNames(tab string) map[string]string {
-	s.mu.Lock()
-	sess := s.sessions[target.ID(tab)]
-	s.mu.Unlock()
+// refNames is the tab's refs as the elements they stood for, as of its latest
+// snapshot.
+func (s *server) refNames(tab string) map[string]refAt {
+	sess := s.liveSession(tab)
 	if sess == nil {
 		return nil
 	}
-	m, _ := sess.named.Load().(map[string]string)
+	m, _ := sess.named.Load().(map[string]refAt)
 	return m
+}
+
+// liveSession is the tab's session when one is already open; it never opens
+// one, so logging a request does not launch a browser.
+func (s *server) liveSession(tab string) *tabSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessions[target.ID(tab)]
 }
 
 // named turns a ref such as e12 into the element it stood for, such as
 // button "Next", so the log reads the same tomorrow, when refs mean
 // nothing; anything else (a role and name, a CSS selector) stays as given.
-func named(el string, names map[string]string) string {
-	if n, ok := names[el]; ok {
-		return n
+func named(el string, names map[string]refAt) string {
+	if at, ok := names[el]; ok {
+		return at.base()
 	}
 	return el
 }
 
 // describe says what a request acted on, leaving out what was typed
 // unless full is set. Elements are logged by role and name (see named).
-func describe(op string, a map[string]string, full bool, names map[string]string) string {
+func describe(op string, a map[string]string, full bool, names map[string]refAt) string {
 	secret := func(label, v string) string {
 		if full {
 			return fmt.Sprintf("%s %q", label, v)
@@ -250,31 +257,38 @@ func loggedSteps(req Request, res any) []Step {
 	case RunResult:
 		return r.Recorded
 	}
-	a, names := req.Args, req.names
+	return req.steps
+}
+
+// planSteps is what a request does as replayable steps, its elements labelled
+// now, before it runs, from the snapshot the request saw. Ops that cannot be
+// replayed plan nothing.
+func planSteps(req Request, label func(ref string) string) []Step {
+	a := req.Args
 	switch req.Op {
 	case "click", "hover":
-		return []Step{recordStep(Step{Action: req.Op, Element: a["selector"]}, names)}
+		return []Step{recordStep(Step{Action: req.Op, Element: a["selector"]}, label)}
 	case "type":
-		return []Step{recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]}, names)}
+		return []Step{recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]}, label)}
 	case "fill":
 		var pairs [][2]string
 		_ = json.Unmarshal([]byte(a["pairs"]), &pairs)
 		var out []Step
 		for _, p := range pairs {
-			out = append(out, recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}, names))
+			out = append(out, recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}, label))
 		}
 		return out
 	case "key":
 		return []Step{{Action: "key", Key: a["keys"]}}
 	case "wait":
-		return []Step{recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"}, names)}
+		return []Step{recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"}, label)}
 	case "goto", "open":
-		return []Step{recordStep(Step{Action: "goto", URL: a["url"]}, names)}
+		return []Step{recordStep(Step{Action: "goto", URL: a["url"]}, label)}
 	}
 	return nil
 }
 
-func describeFill(pairs string, full bool, names map[string]string) string {
+func describeFill(pairs string, full bool, names map[string]refAt) string {
 	var ps [][2]string
 	_ = json.Unmarshal([]byte(pairs), &ps)
 	var out []string
@@ -289,7 +303,7 @@ func describeFill(pairs string, full bool, names map[string]string) string {
 	return strings.Join(out, ", ")
 }
 
-func describeBatch(steps string, full bool, names map[string]string) string {
+func describeBatch(steps string, full bool, names map[string]refAt) string {
 	var ss []Step
 	_ = json.Unmarshal([]byte(steps), &ss)
 	out := []string{fmt.Sprintf("%d steps:", len(ss))}

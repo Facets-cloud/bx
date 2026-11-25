@@ -159,6 +159,9 @@ func (s *server) handle(conn net.Conn) {
 	resp := Response{}
 	began, title := time.Now(), s.taskTitle(req.Args["session"])
 	req.names = s.refNames(req.Args["tab"])
+	if sess := s.liveSession(req.Args["tab"]); sess != nil {
+		req.steps = planSteps(req, sess.labeller())
+	}
 	data, err := s.dispatch(req)
 	took := time.Since(began)
 	if title == "" {
