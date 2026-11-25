@@ -301,7 +301,8 @@ func planSteps(req Request, r stepRecorder) []Step {
 		}
 		return []Step{r.recordStep(Step{Action: "upload", Element: a["selector"]})}
 	}
-	if a["tab"] == "" || unlogged[req.Op] || ReadOnly[req.Op] {
+	// close ends the tab, which a replay does not need to repeat.
+	if a["tab"] == "" || unlogged[req.Op] || ReadOnly[req.Op] || req.Op == "close" {
 		return nil
 	}
 	return []Step{{Action: req.Op, Unreplayable: req.Op}}

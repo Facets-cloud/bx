@@ -310,3 +310,10 @@ func TestLoggedWaitIsAnExpectStep(t *testing.T) {
 		t.Fatalf("wait gone by element: got %+v", gone)
 	}
 }
+
+// Closing a tab is bookkeeping a replay does not repeat, so it plans nothing.
+func TestCloseIsNotPlanned(t *testing.T) {
+	if got := planSteps(Request{Op: "close", Args: map[string]string{"tab": "t"}}, rec(false, nil)); got != nil {
+		t.Fatalf("close plans steps: %+v", got)
+	}
+}
