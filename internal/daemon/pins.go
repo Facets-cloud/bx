@@ -153,11 +153,13 @@ func needsInput(st Step) bool {
 	return false
 }
 
-// refuseUnreplayable fails before anything runs when a step cannot be replayed:
-// a page-changing op with no step form, or an element that has no place a
-// replay can find. It names the step by its index, as a run's failed does.
-func refuseUnreplayable(steps []Step) error {
-	for i, st := range steps {
+// refuseUnreplayable fails before anything runs when a step from index from on
+// cannot be replayed: a page-changing op with no step form, or an element that
+// has no place a replay can find. It names the step by its index, as a run's
+// failed does.
+func refuseUnreplayable(steps []Step, from int) error {
+	for i := from; i < len(steps); i++ {
+		st := steps[i]
 		if st.Unreplayable != "" {
 			return exit.New(exit.User, "step index %d (%s) cannot be replayed; finish by hand", i, st.Unreplayable)
 		}
@@ -228,8 +230,22 @@ type RunResult struct {
 	BatchResult
 }
 
-// runPin replays a pin's steps on a tab, with the values for its inputs.
-func (s *server) runPin(id, name string, values map[string]string, timeout time.Duration) (RunResult, error) {
+// resumeFrom is the pin's steps from index from on, the ones a run replays: an
+// earlier step is not run again. It refuses an index outside the pin, and a
+// step from there on that cannot be replayed.
+func resumeFrom(steps []Step, from int) ([]Step, error) {
+	if from < 0 || from >= len(steps) {
+		return nil, exit.New(exit.Validation, "--from takes a step index from 0 to %d; the pin has %d steps", len(steps)-1, len(steps))
+	}
+	if err := refuseUnreplayable(steps, from); err != nil {
+		return nil, err
+	}
+	return steps[from:], nil
+}
+
+// runPin replays a pin's steps from index from on, on a tab, with the values
+// for their inputs.
+func (s *server) runPin(id, name string, values map[string]string, from int, timeout time.Duration) (RunResult, error) {
 	p, err := LoadPin(name)
 	if err != nil {
 		return RunResult{}, err
@@ -238,16 +254,20 @@ func (s *server) runPin(id, name string, values map[string]string, timeout time.
 	if len(steps) == 0 {
 		return RunResult{}, exit.New(exit.User, "pin %q has no steps bx can replay: pin the task again", p.Name)
 	}
-	if err := refuseUnreplayable(steps); err != nil {
+	bound, err := resumeFrom(steps, from)
+	if err != nil {
 		return RunResult{}, err
 	}
-	bound, err := bindValues(steps, values)
+	bound, err = bindValues(bound, values)
 	if err != nil {
 		return RunResult{}, err
 	}
 	res, err := s.runSteps(id, bound, timeout)
 	if err != nil {
 		return RunResult{}, err
+	}
+	if res.Failed != nil {
+		*res.Failed += from // the pin's index, as the log and the CLI name it
 	}
 	out := RunResult{Pin: p.Name, BatchResult: res}
 	if res.Failed != nil {

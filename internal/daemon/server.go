@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -299,7 +300,15 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 				return nil, exit.New(exit.Validation, "run: values must be a JSON object of input name to value")
 			}
 		}
-		return s.runPin(id, a["pin"], values, t)
+		from := 0
+		if v := a["from"]; v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return nil, exit.New(exit.Validation, "--from takes a step index, 0 or more, got %q", v)
+			}
+			from = n
+		}
+		return s.runPin(id, a["pin"], values, from, t)
 	case "key":
 		return s.key(id, a["keys"], t)
 	case "upload":

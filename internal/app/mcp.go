@@ -346,6 +346,7 @@ func readTools() []mcpTool {
 				"session": str("For pin: current, previous or a session id."),
 				"task":    map[string]any{"type": "integer", "description": "For pin: the task's number in history's tree."},
 				"tab":     str("For run: the tab to replay the pin on."),
+				"from":    str("For run: the step index to start at, 0-based, as a failed run names it. Resume after a failure with the failed index once fixed by hand, or the next one."),
 				"values":  map[string]any{"type": "object", "description": "For run: each input's name to the value the user gave."}}},
 			run: func(args map[string]any) (mcpContent, error) { return pinsTool(args) }},
 		opTool("list_tabs", "List open tabs, optionally only those of one profile.", "tabs",

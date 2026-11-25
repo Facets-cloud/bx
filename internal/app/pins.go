@@ -192,7 +192,7 @@ func cmdRun(e env) error {
 	body, _ := json.Marshal(values)
 	var res daemon.RunResult
 	if err := e.call("run", map[string]string{"tab": e.pos[0], "pin": strings.Join(e.pos[1:], " "),
-		"values": string(body), "timeout": t}, &res); err != nil {
+		"values": string(body), "from": e.a.flags["from"], "timeout": t}, &res); err != nil {
 		return err
 	}
 	e.o.printJSON(res)
@@ -275,7 +275,7 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 		}
 		body, _ := json.Marshal(values)
 		return daemonCall(args, "run", map[string]string{"tab": argString(args, "tab"), "pin": name,
-			"values": string(body), "timeout": orDefault(argString(args, "timeout"), "30s")})
+			"values": string(body), "from": argString(args, "from"), "timeout": orDefault(argString(args, "timeout"), "30s")})
 	}
 	ps, err := daemon.ListPins()
 	if err != nil {

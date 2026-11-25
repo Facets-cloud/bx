@@ -17,7 +17,7 @@ var valueFlags = map[string]string{
 	"--text": "text", "--submit": "submit", "--file": "file", "--name": "name", "--status": "status", "--body": "body", "--type": "type",
 	"--since": "since", "--limit": "limit", "--task": "task", "--request": "request", "--frame": "frame",
 	"--viewport": "viewport", "--network": "network", "--cpu": "cpu", "--geo": "geo", "--color": "color",
-	"--set": "set",
+	"--set": "set", "--from": "from",
 }
 
 var boolFlags = map[string]string{

@@ -144,14 +144,14 @@ func TestUnreplayableOpsAreMarked(t *testing.T) {
 // step by index.
 func TestRefuseUnreplayable(t *testing.T) {
 	steps := []Step{{Action: "click", Element: `button "Next"`}, {Action: "eval", Unreplayable: "eval"}}
-	err := refuseUnreplayable(steps)
+	err := refuseUnreplayable(steps, 0)
 	if err == nil || !strings.Contains(err.Error(), "step index 1 (eval)") {
 		t.Fatalf("refuse: err %v", err)
 	}
-	if err := refuseUnreplayable([]Step{{Action: "click", Element: `button "Next"`}}); err != nil {
+	if err := refuseUnreplayable([]Step{{Action: "click", Element: `button "Next"`}}, 0); err != nil {
 		t.Fatalf("a replayable pin was refused: %v", err)
 	}
-	if err := refuseUnreplayable([]Step{{Action: "click", Element: `button "Next"` + unreplayable}}); err == nil {
+	if err := refuseUnreplayable([]Step{{Action: "click", Element: `button "Next"` + unreplayable}}, 0); err == nil {
 		t.Fatal("an element with no findable place should be refused")
 	}
 }
@@ -331,13 +331,13 @@ func TestPinAcrossTabsRefused(t *testing.T) {
 	if len(steps) != 2 || steps[1].Unreplayable != otherTab || steps[0].Unreplayable != "" {
 		t.Fatalf("steps %+v: want the second tab's step marked unreplayable", steps)
 	}
-	err := refuseUnreplayable(steps)
+	err := refuseUnreplayable(steps, 0)
 	if err == nil || !strings.Contains(err.Error(), "step index 1 (acts on a second tab)") {
 		t.Fatalf("refuse: err %v", err)
 	}
 	one := Pin{Entries: []Entry{{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Next"`}}},
 		{Tab: "A", Steps: []Step{{Action: "click", Element: `button "Save"`}}}}}
-	if err := refuseUnreplayable(one.Steps()); err != nil {
+	if err := refuseUnreplayable(one.Steps(), 0); err != nil {
 		t.Fatalf("a one-tab pin was refused: %v", err)
 	}
 }
@@ -399,5 +399,22 @@ func TestResultFailure(t *testing.T) {
 	}
 	if got := resultFailure(BatchResult{Done: 2}); got != "" {
 		t.Fatalf("finished batch: %q", got)
+	}
+}
+
+// --from N replays steps N on, not the ones before: an unreplayable step before
+// N is not refused, one from N on is, and an index outside the pin is refused.
+func TestResumeFrom(t *testing.T) {
+	steps := []Step{{Action: "click", Element: `button "A"`}, {Action: "eval", Unreplayable: "eval"}, {Action: "click", Element: `button "B"`}}
+	if got, err := resumeFrom(steps, 2); err != nil || len(got) != 1 || got[0].Element != `button "B"` {
+		t.Fatalf("resume at 2: %+v %v", got, err)
+	}
+	if _, err := resumeFrom(steps, 0); err == nil || !strings.Contains(err.Error(), "step index 1 (eval)") {
+		t.Fatalf("resume at 0 should refuse the unreplayable step 1: %v", err)
+	}
+	for _, from := range []int{-1, 3} {
+		if _, err := resumeFrom(steps, from); err == nil {
+			t.Fatalf("from %d accepted for a 3-step pin", from)
+		}
 	}
 }
