@@ -187,6 +187,13 @@ never logged), then replay it in one call: `bx run <tab> "<name>" --set
 run stops at the first failed step and returns the page as it stands, so
 find the element it meant on that page and carry on from there. Steps that
 fail because the page changed are yours to fix, not a reason to stop.
+If a run failed and you finished the flow by hand, offer to re-pin it under
+the same name ("Re-save the fixed routine as <name>?"): `bx history pin
+current "<name>"` replaces the old pin, so the next run is clean. After you
+finish a multi-step flow that looks repeatable (a test, a form, recurring
+navigation), or the user says "again" or "every time", ask "Save this as a
+routine?" and on yes run `bx history pin current "<name>"`. A wait you ran
+(text or selector) replays as an expect step, so a run reports whether it held.
 
 How bx works for a task is two choices, which you make with `start` from
 what the user says. Leave out what they didn't ask for: their settings

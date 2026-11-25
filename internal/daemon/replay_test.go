@@ -155,3 +155,17 @@ func TestDuplicateNameRoundTrip(t *testing.T) {
 		t.Fatal("pickNth past the last element should fail")
 	}
 }
+
+// A wait the agent ran is recorded as an expect step: its text or element is
+// kept, and the element is named the way a replay can find it again.
+func TestLoggedWaitIsAnExpectStep(t *testing.T) {
+	names := map[string]string{"e7": `status "Saved"`}
+	got := loggedSteps(Request{Op: "wait", Args: map[string]string{"text": "Saved", "gone": "false"}, names: names}, nil)
+	if len(got) != 1 || got[0].Action != "wait" || got[0].Text != "Saved" || got[0].Gone {
+		t.Fatalf("wait by text: got %+v", got)
+	}
+	gone := loggedSteps(Request{Op: "wait", Args: map[string]string{"selector": "e7", "gone": "true"}, names: names}, nil)
+	if len(gone) != 1 || gone[0].Element != `status "Saved"` || !gone[0].Gone {
+		t.Fatalf("wait gone by element: got %+v", gone)
+	}
+}

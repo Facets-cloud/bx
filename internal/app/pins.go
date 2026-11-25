@@ -64,9 +64,17 @@ func pinRecipe(p daemon.Pin) string {
 	if p.Title != "" {
 		fmt.Fprintf(&b, "the task was: %q\n", p.Title)
 	}
-	b.WriteString("To repeat it: ask the user for anything to type or choose (values were never logged), then go " +
-		"through the pages in order. Snapshot each page and do its steps, in one batch where you can; " +
-		"if the page changed, do what the step meant.\n")
+	if len(p.Steps()) == 0 {
+		b.WriteString("This pin has no replayable steps (saved before bx run): pin the task again.\n")
+	} else {
+		if in := p.Inputs(); len(in) > 0 {
+			b.WriteString("inputs (ask the user for each value; values were never logged):\n")
+			for _, x := range in {
+				fmt.Fprintf(&b, "  %s  %s\n", x.Name, x.Label)
+			}
+		}
+		fmt.Fprintf(&b, "To repeat it in one call: bx run <tab> %q --set <input>=<value> ... If it stops on a step, fix that step and re-pin under the same name.\n", p.Name)
+	}
 	steps, skipped, page, at := 0, 0, 0, ""
 	for _, e := range p.Entries {
 		if readOnly[e.Op] || e.Error != "" {

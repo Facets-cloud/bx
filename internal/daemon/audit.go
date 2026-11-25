@@ -266,6 +266,8 @@ func loggedSteps(req Request, res any) []Step {
 		return out
 	case "key":
 		return []Step{{Action: "key", Key: a["keys"]}}
+	case "wait":
+		return []Step{recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"}, names)}
 	case "goto", "open":
 		return []Step{recordStep(Step{Action: "goto", URL: a["url"]}, names)}
 	}

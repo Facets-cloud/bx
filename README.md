@@ -406,6 +406,13 @@ values. `bx run` checks every input is given before it touches the page, and
 stops at the first failed step, returning the page as it stands. A pin saved
 before `bx run` existed has no steps to replay: pin the task again.
 
+After a flow that looks repeatable (a test, a form, recurring navigation), or
+when you say "again" or "every time", the agent asks "Save this as a routine?"
+and on yes pins it. If a run failed and the flow was finished by hand, it offers
+to re-pin under the same name; the new pin replaces the old one, so the next
+run is clean. A `wait` step in a flow replays as an expect step, so a run
+reports whether that text or element appeared.
+
 To send the logs to Loki, Splunk, Datadog or a SIEM, point a log shipper
 such as Fluent Bit, Vector or the OpenTelemetry Collector at the sessions
 folder. [mx](https://github.com/Facets-cloud/mx) writes the same format.
