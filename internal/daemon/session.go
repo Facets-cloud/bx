@@ -47,7 +47,7 @@ type tabSession struct {
 	keyTyping atomic.Bool  // the current request asked to type key by key (BX_TYPING=keys)
 	title     atomic.Value // string: the title of the agent session acting on the tab, if it gave one
 	step      atomic.Value // string: "3/32" while a batch runs, shown in the pointer's tag
-	named     atomic.Value // map[string]string: each ref of the latest snapshot as the element it stood for, for the log
+	named     atomic.Value // map[string]refAt: each ref of the latest snapshot as the element it stood for, for the log
 	clicked   atomic.Int64 // unix nanoseconds of the last click on the tab, see paste
 
 	tmu      sync.Mutex
