@@ -370,6 +370,7 @@ bx history                        # recent sessions
 bx history previous               # one session as a tree: tasks, pages, actions
 bx history pin previous "Onboard vendor"   # name a finished task so an agent can repeat it
 bx history pinned                 # list pins; add a name to see its steps
+bx run <tab> "Onboard vendor" --set email=a@lumen.test --set password=...   # replay a pin on a tab
 bx config                         # log settings
 bx config set log.values full     # also log typed values and whole URLs
 ```
@@ -397,9 +398,13 @@ tools. An agent can raise retention but can't lower logging; it gets the
 
 A pin is a copy of one task, kept in `~/Library/Application Support/bx/pins/`
 outside the log limits. Say "do the Onboard vendor pin for Lumen Analytics"
-and the agent reads its steps, asks you for anything to type (values were
-never logged), and follows them page by page the way a person follows notes,
-so a moved button doesn't break it.
+and the agent reads its inputs, asks you for each value (values were never
+logged), and replays the steps with `bx run`. A pin keeps each typed field as
+an input such as `textbox-email`, and each repeat of the same field gets its
+own (`textbox-email-2`), so a form that asks for the same thing twice gets two
+values. `bx run` checks every input is given before it touches the page, and
+stops at the first failed step, returning the page as it stands. A pin saved
+before `bx run` existed has no steps to replay: pin the task again.
 
 To send the logs to Loki, Splunk, Datadog or a SIEM, point a log shipper
 such as Fluent Bit, Vector or the OpenTelemetry Collector at the sessions

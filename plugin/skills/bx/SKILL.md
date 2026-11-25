@@ -180,11 +180,13 @@ but lowering logging is the user's call: give them the command.
 
 Pins are tasks saved to repeat. When the user says "pin that as <name>",
 run `bx history pin current "<name>"` (MCP: `pins` with action pin). When
-they ask to do a pinned task again, read it with `bx history pinned
-"<name>"` (MCP: `pins` action show), ask them for every value the steps
-fill or choose (values are never logged), then go through its pages in
-order: snapshot each and run its steps, in one batch where you can. If a
-page changed, do what the step meant rather than failing.
+they ask to do a pinned task again, read its inputs with `bx history pinned
+"<name>"` (MCP: `pins` action show), ask the user for each value (values are
+never logged), then replay it in one call: `bx run <tab> "<name>" --set
+<input>=<value> ...` (MCP: `pins` with action run, `tab` and `values`). A
+run stops at the first failed step and returns the page as it stands, so
+find the element it meant on that page and carry on from there. Steps that
+fail because the page changed are yours to fix, not a reason to stop.
 
 How bx works for a task is two choices, which you make with `start` from
 what the user says. Leave out what they didn't ask for: their settings
