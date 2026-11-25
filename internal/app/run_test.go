@@ -37,3 +37,21 @@ func TestPinRecipeListsInputs(t *testing.T) {
 		t.Fatal("a pin with no steps should say to pin again")
 	}
 }
+
+// MCP run values: text, numbers and booleans are accepted as the input's text;
+// a nested object or list is refused.
+func TestRunValuesAcceptsScalars(t *testing.T) {
+	got, err := runValues(map[string]any{"count": 3.0, "ok": true, "email": "a@b.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["count"] != "3" || got["ok"] != "true" || got["email"] != "a@b.test" {
+		t.Fatalf("values %v", got)
+	}
+	if _, err := runValues(map[string]any{"x": map[string]any{"a": 1}}); err == nil {
+		t.Fatal("a nested object should be refused")
+	}
+	if _, err := runValues("not an object"); err == nil {
+		t.Fatal("a non-object should be refused")
+	}
+}

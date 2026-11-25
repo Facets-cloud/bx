@@ -403,8 +403,12 @@ logged), and replays the steps with `bx run`. A pin keeps each typed field as
 an input such as `textbox-email`, and each repeat of the same field gets its
 own (`textbox-email-2`), so a form that asks for the same thing twice gets two
 values. `bx run` checks every input is given before it touches the page, and
-stops at the first failed step, returning the page as it stands. A pin saved
-before `bx run` existed has no steps to replay: pin the task again.
+stops at the first failed step, returning the page as it stands. `failed` is
+the 0-based step index, as `bx batch` reports it. A step bx cannot repeat (eval,
+drag, a mouse action, a multi-file upload) is refused before anything runs: finish
+it by hand and pin again. An upload's file and a URL with a query or fragment are
+inputs (`file`, `url`), never stored. A pin saved before `bx run` existed has no
+steps to replay: pin the task again.
 
 After a flow that looks repeatable (a test, a form, recurring navigation), or
 when you say "again" or "every time", the agent asks "Save this as a routine?"

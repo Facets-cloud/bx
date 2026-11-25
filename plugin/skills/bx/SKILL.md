@@ -185,7 +185,11 @@ they ask to do a pinned task again, read its inputs with `bx history pinned
 never logged), then replay it in one call: `bx run <tab> "<name>" --set
 <input>=<value> ...` (MCP: `pins` with action run, `tab` and `values`). A
 run stops at the first failed step and returns the page as it stands, so
-find the element it meant on that page and carry on from there. Steps that
+find the element it meant on that page and carry on from there. `failed` is the
+0-based step index. A pin with a step bx cannot repeat (eval, drag, a mouse
+action, a multi-file upload) is refused before anything runs: do that step by
+hand and re-pin. Upload files and URLs with a query or fragment are inputs
+(`file`, `url`), so ask the user for them. Steps that
 fail because the page changed are yours to fix, not a reason to stop.
 If a run failed and you finished the flow by hand, offer to re-pin it under
 the same name ("Re-save the fixed routine as <name>?"): `bx history pin
