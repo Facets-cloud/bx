@@ -385,3 +385,19 @@ func TestTypedKeyIsInputSlot(t *testing.T) {
 		t.Fatalf("log of a typed key: %q", got)
 	}
 }
+
+// A batch that stops at a failed step or an opened dialog returns no error,
+// so its log entry takes the failure from the result: a FAILED entry, which
+// pins leave out. A batch that finished has none.
+func TestResultFailure(t *testing.T) {
+	failed := 1
+	if got := resultFailure(BatchResult{Done: 1, Failed: &failed, Error: "no such element"}); got != "no such element" {
+		t.Fatalf("failed batch: %q", got)
+	}
+	if got := resultFailure(RunResult{BatchResult: BatchResult{Error: "stopped: the page opened a dialog"}}); got == "" {
+		t.Fatal("a run stopped by a dialog logged as success")
+	}
+	if got := resultFailure(BatchResult{Done: 2}); got != "" {
+		t.Fatalf("finished batch: %q", got)
+	}
+}

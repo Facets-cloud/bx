@@ -91,6 +91,7 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 		e.Error = errorResponse(err).Error
 	} else {
 		e.Steps = loggedSteps(req, res)
+		e.Error = resultFailure(res)
 	}
 	if tab, ok := res.(Tab); ok { // open
 		e.Tab = string(tab.ID)
@@ -263,6 +264,19 @@ func loggedSteps(req Request, res any) []Step {
 		return r.Recorded
 	}
 	return req.steps
+}
+
+// resultFailure is why a batch or run stopped short, or "" if it finished. It
+// returns no error, so the entry must carry this: a failed step is a FAILED
+// entry, and pins leave it out.
+func resultFailure(res any) string {
+	switch r := res.(type) {
+	case BatchResult:
+		return r.Error
+	case RunResult:
+		return r.Error
+	}
+	return ""
 }
 
 // ReadOnly ops look at a page without changing it: a pin leaves them out. It
