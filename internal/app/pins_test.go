@@ -8,6 +8,26 @@ import (
 	"github.com/Facets-cloud/bx/internal/daemon"
 )
 
+// A batch that stopped after some steps is PARTIAL in the log and in the pin
+// recipe, which leaves its entry out; a batch that failed at its first step
+// is FAILED.
+func TestPartialBatchIsMarked(t *testing.T) {
+	part := daemon.Entry{Op: "batch", Target: "2 steps: click button \"A\"; fill textbox \"B\"",
+		Error: "no such element", Steps: []daemon.Step{{Action: "click", Element: `button "A"`}}}
+	if got := actionLine(part); !strings.Contains(got, "PARTIAL: no such element") {
+		t.Fatalf("partial line: %q", got)
+	}
+	none := part
+	none.Steps = nil
+	if got := actionLine(none); !strings.Contains(got, "FAILED: no such element") || strings.Contains(got, "PARTIAL") {
+		t.Fatalf("failed line: %q", got)
+	}
+	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: "p"}, Entries: []daemon.Entry{part}}
+	if got := pinRecipe(p); !strings.Contains(got, "PARTIAL: the task stopped short") || strings.Contains(got, "click button") {
+		t.Fatalf("recipe should name the partial batch and omit its steps:\n%s", got)
+	}
+}
+
 func TestPinRoundTripAndRecipe(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t0 := time.Now()

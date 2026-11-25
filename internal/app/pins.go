@@ -72,7 +72,15 @@ func pinRecipe(p daemon.Pin) string {
 		fmt.Fprintf(&b, "To repeat it in one call: bx run <tab> %q --set <input>=<value> ... If it stops on a step, fix that step and re-pin under the same name.\n", p.Name)
 	}
 	steps, skipped, page, at := 0, 0, 0, ""
+	partial := ""
 	for _, e := range p.Entries {
+		if e.Error != "" && len(e.Steps) > 0 {
+			// Left out: its steps stop short of the task, so a replay would not
+			// be the task. The reason is shown so the pin reads as partial.
+			partial = e.Error
+			skipped++
+			continue
+		}
 		if daemon.ReadOnly[e.Op] || e.Error != "" {
 			skipped++
 			continue
@@ -87,6 +95,9 @@ func pinRecipe(p daemon.Pin) string {
 		}
 	}
 	fmt.Fprintf(&b, "(%s on %s; %d reads and failed attempts left out)\n", plural(steps, "step"), plural(page, "page"), skipped)
+	if partial != "" {
+		fmt.Fprintf(&b, "PARTIAL: the task stopped short in a batch, which is left out (%s). Pin the task again once it finishes.\n", partial)
+	}
 	return b.String()
 }
 
