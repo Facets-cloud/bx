@@ -466,6 +466,53 @@ func TestRePinKeepsInputName(t *testing.T) {
 	}
 }
 
+// A field removed and another added on re-pin keeps the old name by place, so
+// the input is marked ByPlace and a run warns; a later re-pin that matches it
+// by its exact label clears the mark. An elementless input (url) is never
+// marked: it has no label to confirm.
+func TestRePinByPlaceWarns(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	pin := func(labels ...string) []Step {
+		steps := []Step{{Action: "goto", Input: "url"}}
+		for _, l := range labels {
+			steps = append(steps, Step{Action: "fill", Element: `textbox "` + l + `"`, Value: "v"})
+		}
+		if _, _, err := SavePin(Pin{PinHeader: PinHeader{Name: "form"}, Entries: []Entry{{Steps: steps}}}); err != nil {
+			t.Fatal(err)
+		}
+		p, err := LoadPin("form")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return unchecked(p.Steps()) // as runPin reads them
+	}
+	if w := byPlaceWarning(pin("Email", "Phone")); w != "" {
+		t.Fatalf("a first pin warns: %q", w)
+	}
+	steps := pin("Email", "Company") // Phone removed, Company added
+	if steps[0].ByPlace || steps[1].ByPlace || !steps[2].ByPlace || steps[2].Input != "textbox-phone" {
+		t.Fatalf("marks %+v", steps)
+	}
+	want := `warning: textbox-phone was kept by position (now textbox "Company"); check the value or re-pin`
+	if w := byPlaceWarning(steps); w != want {
+		t.Fatalf("warning %q", w)
+	}
+	if w := byPlaceWarning(steps[2:]); w != want { // run --from 2 still warns
+		t.Fatalf("from 2: %q", w)
+	}
+	steps = pin("Email", "Company") // saved again, Company matches by label
+	if w := byPlaceWarning(steps); w != "" || steps[2].Input != "textbox-phone" {
+		t.Fatalf("exact re-pin kept the mark: %q %+v", w, steps)
+	}
+	two := []Step{
+		{Action: "fill", Element: `textbox "A"`, Input: "textbox-x", ByPlace: true},
+		{Action: "fill", Element: `textbox "B"`, Input: "textbox-y", ByPlace: true},
+	}
+	if w := byPlaceWarning(two); w != `warning: textbox-x (now textbox "A"), textbox-y (now textbox "B") were kept by position; check the values or re-pin` {
+		t.Fatalf("two: %q", w)
+	}
+}
+
 // A field added before another on re-pin gets a fresh name, reported as new;
 // the existing field keeps its name by its label, and no value shifts.
 func TestRePinAddedFieldDoesNotShift(t *testing.T) {
@@ -552,7 +599,7 @@ func TestInputURLSkipsPageCheck(t *testing.T) {
 	}
 }
 
-// A path that differs only in a record ID (digits or a UUID) is the same page;
+// A path that differs only in a record ID (digits, a UUID or a 24-hex ObjectId) is the same page;
 // any other difference, or another segment count, is not.
 func TestSamePage(t *testing.T) {
 	u1, u2 := "3f2b8c1e-9a4d-4e2f-8b1a-0c9d8e7f6a5b", "A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF"
@@ -567,6 +614,13 @@ func TestSamePage(t *testing.T) {
 		{"/orders/123/edit", "/orders/new/edit", false},
 		{"/orders/123", "/orders/123/edit", false},
 		{"/orders/1/edit", "/orders/1/edit/", false},
+		{"/x/507f1f77bcf86cd799439011/edit", "/x/65A1B2C3D4E5F60718293A4B/edit", true},
+		{"/x/507f1f77bcf86cd799439011/edit", "/x/42/edit", true},
+		{"/x/507f1f77bcf86cd79943901/edit", "/x/42/edit", false},   // 23 hex
+		{"/x/507f1f77bcf86cd7994390111/edit", "/x/42/edit", false}, // 25 hex
+		{"/x/507f1f77bcf86cd79943901g/edit", "/x/42/edit", false},  // not hex
+		{"/vendors/lumen-analytics", "/vendors/acme-corp", false},
+		{"/customers/cus_123", "/customers/cus_456", false},
 		{"about:blank", "about:blank", true},
 		{"/", "/", true},
 	}

@@ -206,11 +206,15 @@ earlier inputs are ignored. After a failure at N: fix step N by hand, then
 `--from N+1`. A run stops before a step when the page is on another path than
 the step recorded (its failure reads `expected page /x, on /y`): that is a
 different page, not a moved element, so find where the flow is before you
-resume. A record ID in the path (digits or a UUID) may differ, a goto is never
-checked, and after a goto to a `url` input no step is checked until the next
-goto to a fixed URL. When you re-pin, an input keeps its name by its label; a
-field the site added gets a fresh name, reported as `new input <name>`: ask the
-user for it before the next run. A step's element `#k` is its position among
+resume. A record ID in the path (digits, a UUID or a 24-hex ObjectId; not a slug
+or `cus_123`) may differ, a goto is never checked, and after a goto to a `url`
+input no step is checked until the next goto to a fixed URL. When you re-pin, an
+input keeps its name by its label; a field the site added gets a fresh name,
+reported as `new input <name>`: ask the user for it before the next run. An
+input kept by position under a new label (`kept as`) may be a different field:
+until the pin is saved again with that label matching, a run's `warning` names
+it; tell the user which field the value now goes into, and re-pin once they
+confirm. A step's element `#k` is its position among
 same-named elements, so a new element with that name earlier on the page shifts
 it without failing; check the element a replay acted on.
 

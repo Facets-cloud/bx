@@ -424,8 +424,11 @@ values for inputs used only before N are ignored. After a failure at N, fix step
 N by hand, then run with `--from N+1`. Each step records the path of the page it
 started on (no query), and a replay stops before a step when the page is on
 another path, returning the expected and actual path with the page as it stands.
-Paths match segment by segment, and a record ID (all digits, or a UUID) may
-differ, so a pin recorded on `/orders/123/edit` runs on `/orders/456/edit`. A
+Paths match segment by segment, and a record ID may differ, so a pin recorded
+on `/orders/123/edit` runs on `/orders/456/edit`. A record ID is all digits, a
+UUID, or a 24-hex Mongo ObjectId. A slug (`/vendors/lumen-analytics`) or a
+prefixed ID (`cus_123`) is not one, so the run stops on another record; check
+you are on the right page and resume with `--from N`. A
 `goto` (or `open`) is never checked, and after a `goto` to a `url` input no step
 is checked until the next `goto` to a fixed URL, since that URL can lead to
 another record each run.
@@ -435,6 +438,15 @@ or, when the pin has as many inputs of that kind as before, by its place among
 them (a relabelled field: `input textbox-work-email kept as textbox-email`).
 Otherwise it gets a fresh name, reported as `new input textbox-company`, so a
 field added to the form never shifts the other values.
+
+Limit: matching by place can't tell a renamed field from one removed and another
+added. If Phone goes and Company comes in, Company keeps `textbox-phone`, and
+`--set textbox-phone=555` types 555 into Company. So an input kept by place with
+a new label is marked in the pin, and each `bx run` (CLI and MCP) returns one
+line in `warning`: `warning: textbox-phone was kept by position (now textbox
+"Company"); check the value or re-pin`. The mark clears when the pin is saved
+again and that input matches its exact label, which re-pinning the same flow
+does, so re-pin once you have checked the value goes into the right field.
 
 Limit: a step's element is kept as `#k` when several on the page share a name, so
 `button "Save" #2` is the second one. A new element with the same name earlier on
@@ -456,6 +468,9 @@ folder. [mx](https://github.com/Facets-cloud/mx) writes the same format.
 - **Tabs it opens stay open** unless the agent closes them.
 - **No confirm gate.** bx doesn't stop a click on Submit or Send by itself;
   the skill tells the agent to ask you first.
+- **A re-pin can't tell a renamed field from a swapped one.** An input kept by
+  place gets a `warning` on each `bx run` until a re-pin matches its label
+  (see [Audit log](#audit-log)).
 
 ## How it compares
 

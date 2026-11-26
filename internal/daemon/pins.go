@@ -111,7 +111,10 @@ func (p Pin) Inputs() []PinInput {
 //     goto's url or a typed key has no element, so it has no label to match);
 //  2. else, only when the pin has as many inputs of its kind (see inputKind)
 //     as before, the old input at the same place among that kind, so a
-//     renamed label keeps its name ("input <new> kept as <old>");
+//     renamed label keeps its name ("input <new> kept as <old>"). A field
+//     removed and another added look the same, so when the labels differ
+//     the step is marked ByPlace and bx run warns about it; a later re-pin
+//     that matches it by rule 1 clears the mark;
 //  3. else it gets a fresh name no old input had, reported as "new input
 //     <name>".
 //
@@ -132,7 +135,7 @@ func withInputs(p, prev Pin) (Pin, []string) {
 		entries[i].Steps = slices.Clone(entries[i].Steps)
 		for j := range entries[i].Steps {
 			if st := &entries[i].Steps[j]; needsInput(*st) {
-				st.Value, st.Text, st.Files = "", "", nil
+				st.Value, st.Text, st.Files, st.ByPlace = "", "", nil, false
 				in = append(in, st)
 			}
 		}
@@ -167,6 +170,7 @@ func withInputs(p, prev Pin) (Pin, []string) {
 		for k, o := range old {
 			if !taken[k] && inputKind(o) == kind && oldPlace[k] == newPlace[i] {
 				names[i], taken[k] = o.Input, true
+				st.ByPlace = o.Element != st.Element
 				if b := inputBase(*st); b != o.Input {
 					notes[i] = fmt.Sprintf("input %s kept as %s", b, o.Input)
 				}
@@ -309,6 +313,8 @@ func bindValues(steps []Step, from int, values map[string]string) ([]Step, error
 type RunResult struct {
 	Pin  string `json:"pin"`
 	Page string `json:"page,omitempty"`
+	// Warning names the inputs a re-pin kept by place (see Step.ByPlace).
+	Warning string `json:"warning,omitempty"`
 	BatchResult
 }
 
@@ -347,7 +353,7 @@ func (s *server) runPin(id, name string, values map[string]string, from int, tim
 	if res.Failed != nil {
 		*res.Failed += from // the pin's index, as the log and the CLI name it
 	}
-	out := RunResult{Pin: p.Name, BatchResult: res}
+	out := RunResult{Pin: p.Name, Warning: byPlaceWarning(bound), BatchResult: res}
 	if res.Failed != nil {
 		snap, err := s.snapshot(id, timeout)
 		if err == nil {
@@ -360,6 +366,27 @@ func (s *server) runPin(id, name string, values map[string]string, from int, tim
 		}
 	}
 	return out, nil
+}
+
+// byPlaceWarning is one line naming the inputs of steps that a re-pin kept by
+// place, or "" when there are none.
+func byPlaceWarning(steps []Step) string {
+	var list []string
+	seen := map[string]bool{}
+	for _, st := range steps {
+		if st.ByPlace && !seen[st.Input] {
+			seen[st.Input] = true
+			list = append(list, fmt.Sprintf("%s (now %s)", st.Input, st.Element))
+		}
+	}
+	switch len(list) {
+	case 0:
+		return ""
+	case 1:
+		name, now, _ := strings.Cut(list[0], " ")
+		return fmt.Sprintf("warning: %s was kept by position %s; check the value or re-pin", name, now)
+	}
+	return fmt.Sprintf("warning: %s were kept by position; check the values or re-pin", strings.Join(list, ", "))
 }
 
 // SavePin writes a pin, replacing one with the same name.
