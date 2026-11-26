@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -139,5 +141,24 @@ func TestMCPBDoesNotSelfUpdate(t *testing.T) {
 	t.Setenv("BX_MCPB", "")
 	if c := versionCheck(); !strings.Contains(c.Detail, "run bx update") {
 		t.Fatalf("outside the bundle, doctor detail = %q", c.Detail)
+	}
+}
+
+// Either bx plugin brings the skill, so doctor doesn't ask for a personal
+// copy in ~/.claude/skills (which would load the skill twice).
+func TestClaudePluginBringsSkill(t *testing.T) {
+	for plugin, want := range map[string]bool{"bx@bx": true, "bx-cli@bx": true, "other@bx": false} {
+		home := t.TempDir()
+		dir := filepath.Join(home, ".claude", "plugins")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := `{"version":2,"plugins":{"` + plugin + `":[{"scope":"user"}]}}`
+		if err := os.WriteFile(filepath.Join(dir, "installed_plugins.json"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := claudePluginInstalled(home); got != want {
+			t.Errorf("%s: got %v, want %v", plugin, got, want)
+		}
 	}
 }
