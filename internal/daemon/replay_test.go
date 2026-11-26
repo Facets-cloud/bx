@@ -468,6 +468,26 @@ func TestPageCheck(t *testing.T) {
 	}
 }
 
+// After a goto whose URL is an input, steps are not checked until the next goto
+// with a fixed URL; from there they are checked again.
+func TestInputURLSkipsPageCheck(t *testing.T) {
+	steps := unchecked([]Step{
+		{Action: "click", Path: "/home"},
+		{Action: "goto", Input: "url", Path: "/home"},
+		{Action: "fill", Path: "/orders/abc", Input: "textbox-name"},
+		{Action: "click", Path: "/orders/abc/done"},
+		{Action: "goto", URL: "http://127.0.0.1/list", Path: "/orders/abc/done"},
+		{Action: "click", Path: "/list"},
+	})
+	var paths []string
+	for _, st := range steps {
+		paths = append(paths, st.Path)
+	}
+	if got := strings.Join(paths, ","); got != "/home,,,,,/list" {
+		t.Fatalf("checked paths %q, want /home,,,,,/list", got)
+	}
+}
+
 // A path that differs only in a record ID (digits or a UUID) is the same page;
 // any other difference, or another segment count, is not.
 func TestSamePage(t *testing.T) {

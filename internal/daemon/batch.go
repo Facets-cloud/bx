@@ -232,12 +232,20 @@ func urlPath(href string) string {
 	return u.Path
 }
 
-// unchecked is steps with the page check off where a replay must not make it:
-// a goto leaves the page it was recorded on, so the tab may start anywhere.
+// unchecked is steps with the page check off where a replay must not make it.
+// A goto is never checked: it leaves the page it was recorded on, so the tab
+// may start anywhere. After a goto whose URL is an input, no step is checked
+// until the next goto with a fixed URL: the user's URL can lead to other
+// pages than the recorded one. Pass the pin's whole list, so a run --from N
+// still knows about a goto before N.
 func unchecked(steps []Step) []Step {
 	out := slices.Clone(steps)
+	free := false
 	for i := range out {
 		if out[i].Action == "goto" {
+			free = out[i].Input != ""
+		}
+		if out[i].Action == "goto" || free {
 			out[i].Path = ""
 		}
 	}
