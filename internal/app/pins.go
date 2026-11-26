@@ -75,8 +75,9 @@ func pinRecipe(p daemon.Pin) string {
 	partial := ""
 	for _, e := range p.Entries {
 		if e.Error != "" && len(e.Steps) > 0 {
-			// Left out: its steps stop short of the task, so a replay would not
-			// be the task. The reason is shown so the pin reads as partial.
+			// Not listed: its logged target names every step it was sent, not the
+			// ones that ran. Pin.Steps still replays the steps that ran, so the
+			// note says so, and that the rest must be done by hand.
 			partial = e.Error
 			skipped++
 			continue
@@ -96,7 +97,7 @@ func pinRecipe(p daemon.Pin) string {
 	}
 	fmt.Fprintf(&b, "(%s on %s; %d reads and failed attempts left out)\n", plural(steps, "step"), plural(page, "page"), skipped)
 	if partial != "" {
-		fmt.Fprintf(&b, "PARTIAL: the task stopped short in a batch, which is left out (%s). Pin the task again once it finishes.\n", partial)
+		fmt.Fprintf(&b, "PARTIAL: the task stopped short in a batch (%s). bx run replays the steps of it that ran, not the rest: finish by hand and pin the task again.\n", partial)
 	}
 	return b.String()
 }

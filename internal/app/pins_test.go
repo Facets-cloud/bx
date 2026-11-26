@@ -9,8 +9,8 @@ import (
 )
 
 // A batch that stopped after some steps is PARTIAL in the log and in the pin
-// recipe, which leaves its entry out; a batch that failed at its first step
-// is FAILED.
+// recipe, which says bx run replays the steps that ran; a batch that failed at
+// its first step is FAILED.
 func TestPartialBatchIsMarked(t *testing.T) {
 	part := daemon.Entry{Op: "batch", Target: "2 steps: click button \"A\"; fill textbox \"B\"",
 		Error: "no such element", Steps: []daemon.Step{{Action: "click", Element: `button "A"`}}}
@@ -23,8 +23,11 @@ func TestPartialBatchIsMarked(t *testing.T) {
 		t.Fatalf("failed line: %q", got)
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: "p"}, Entries: []daemon.Entry{part}}
-	if got := pinRecipe(p); !strings.Contains(got, "PARTIAL: the task stopped short") || strings.Contains(got, "click button") {
-		t.Fatalf("recipe should name the partial batch and omit its steps:\n%s", got)
+	if got := pinRecipe(p); !strings.Contains(got, "PARTIAL: the task stopped short") || !strings.Contains(got, "replays the steps of it that ran") {
+		t.Fatalf("recipe should name the partial batch and that its steps that ran replay:\n%s", got)
+	}
+	if steps := p.Steps(); len(steps) != 1 || steps[0].Element != `button "A"` {
+		t.Fatalf("a partial batch's steps that ran should replay: %+v", steps)
 	}
 }
 

@@ -267,8 +267,8 @@ func loggedSteps(req Request, res any) []Step {
 }
 
 // resultFailure is why a batch or run stopped short, or "" if it finished. It
-// returns no error, so the entry must carry this: a failed step is a FAILED
-// entry, and pins leave it out.
+// returns no error, so the entry must carry this: history shows it FAILED, or
+// PARTIAL when some steps ran, and a pin replays only the steps that ran.
 func resultFailure(res any) string {
 	switch r := res.(type) {
 	case BatchResult:
