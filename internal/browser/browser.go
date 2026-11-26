@@ -140,13 +140,34 @@ func (b Browser) Dir() string {
 	return filepath.Join(home, b.DataDir)
 }
 
+// fullDiskAccessHint says how to let bx read the browser's folder, which
+// macOS 27 blocks without Full Disk Access. macOS grants it to the app
+// responsible for bx: the terminal or agent app that started it. Claude
+// Desktop starts its extensions' servers as their own responsible apps
+// (Contents/Helpers/disclaimer), so inside bx.mcpb (BX_MCPB=1) Claude's own
+// access doesn't reach bx, and the user must add the bx binary itself.
+func fullDiskAccessHint() string {
+	if os.Getenv("BX_MCPB") == "1" {
+		self, err := os.Executable()
+		if err == nil {
+			self, err = filepath.EvalSymlinks(self)
+		}
+		if err == nil {
+			return "Claude Desktop runs bx as its own app, so Claude's Full Disk Access doesn't cover it. " +
+				"Ask the user to open System Settings > Privacy & Security > Full Disk Access, click +, press Cmd+Shift+G, paste " +
+				self + " , press Return, click Open and turn bx on, then quit Claude with Cmd+Q and reopen it"
+		}
+	}
+	return "give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it"
+}
+
 // WSURL reads DevToolsActivePort and returns the browser's WebSocket URL.
 func (b Browser) WSURL() (string, error) {
 	data, err := os.ReadFile(filepath.Join(b.Dir(), "DevToolsActivePort"))
 	switch {
 	case errors.Is(err, fs.ErrPermission):
 		return "", exit.New(exit.Permission,
-			"macOS blocked reading %s's DevToolsActivePort: give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it", b.Label)
+			"macOS blocked reading %s's DevToolsActivePort: %s", b.Label, fullDiskAccessHint())
 	case errors.Is(err, fs.ErrNotExist):
 		return "", exit.New(exit.Upstream,
 			"%s is not running with remote debugging on: turn it on at %s (or quit the browser and run bx setup)", b.Label, b.Inspect)
@@ -186,7 +207,7 @@ func (b Browser) profiles() ([]Profile, error) {
 	data, err := os.ReadFile(filepath.Join(b.Dir(), "Local State"))
 	if err != nil {
 		if errors.Is(err, fs.ErrPermission) {
-			return nil, exit.New(exit.Permission, "macOS blocked reading %s's Local State: give the app that runs bx (your terminal, or Claude Desktop or Cursor for MCP) Full Disk Access in System Settings > Privacy & Security, then restart it", b.Label)
+			return nil, exit.New(exit.Permission, "macOS blocked reading %s's Local State: %s", b.Label, fullDiskAccessHint())
 		}
 		return nil, exit.New(exit.Upstream, "read %s profiles: %v", b.Label, err)
 	}

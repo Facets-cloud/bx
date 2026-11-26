@@ -34,7 +34,7 @@ cat > "$stage/manifest.json" <<EOF
   "display_name": "bx",
   "version": "$version",
   "description": "Drive the Chromium browser you already have open, in a profile you name, with your logins.",
-  "long_description": "bx lets Claude click through pages and read their console, network and storage in your own running browser (Brave, Chrome, Edge, Arc or Vivaldi on Chromium 144 or later). Turn on remote debugging once at the browser's inspect page, give Claude Full Disk Access on macOS 27 and later, and click Allow once per browser run.",
+  "long_description": "bx lets Claude click through pages and read their console, network and storage in your own running browser (Brave, Chrome, Edge, Arc or Vivaldi on Chromium 144 or later). Turn on remote debugging once at the browser's inspect page, on macOS 27 and later give bx itself Full Disk Access (bx names the file to add), not Claude, and click Allow once per browser run.",
   "author": { "name": "Facets", "url": "https://facets-cloud.github.io/bx/" },
   "homepage": "https://facets-cloud.github.io/bx/",
   "support": "https://github.com/Facets-cloud/bx/issues",

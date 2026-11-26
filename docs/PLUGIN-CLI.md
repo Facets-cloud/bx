@@ -58,6 +58,13 @@ Claude Desktop owns the extension folder, so with that set, `bx update`
 refuses to replace the binary, and `doctor` points at the new `bx.mcpb`
 instead of `bx update`.
 
+Full Disk Access (macOS 27 and later) has to go to bx itself. Claude Desktop
+starts extension servers through `Claude.app/Contents/Helpers/disclaimer`,
+which disclaims responsibility for the child, so macOS checks the bx binary
+and ignores Claude's own access. With `BX_MCPB=1`, bx's permission error
+names its own path and the steps. The binary is ad hoc signed, so macOS
+identifies it by hash and the grant lapses when an update replaces it.
+
 ## Not done
 
 - Cowork: not checked whether a server started from Cowork can reach the

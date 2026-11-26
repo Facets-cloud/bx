@@ -200,7 +200,12 @@ bx skill install
 Download [bx.mcpb](https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb)
 and double-click it, then click Install. The bundle carries bx for Apple
 silicon and Intel, so there's no Node or terminal to set up. On macOS 27 and
-later, give Claude Desktop Full Disk Access (see below). To update, install
+later, give bx itself Full Disk Access, not Claude: Claude Desktop runs an
+extension's server as its own app, so Claude's access doesn't reach it. When
+bx is blocked, its error names the file to add (it's
+`~/Library/Application Support/Claude/Claude Extensions/local.mcpb.facets.bx/server/bx`).
+In Full Disk Access, click +, press Cmd+Shift+G, paste that path, turn bx
+on, then quit Claude with Cmd+Q and reopen it. To update, install
 the new `bx.mcpb`; bx doesn't replace itself inside the extension.
 
 Other MCP apps, such as LM Studio, take this in their MCP config:

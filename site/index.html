@@ -461,7 +461,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
     </div>
-    <div class="callout"><b>macOS 27 and later:</b> give the app that runs bx Full Disk Access (your terminal, your editor, Claude Desktop, Cursor or any other agent app). macOS grants it per app, and bx inherits it from the app that starts it. bx reads <code>DevToolsActivePort</code> and <code>Local State</code> in the browser's folder, and macOS 27 blocks that otherwise. Rather not? The <code>launch</code> tool starts a separate copy of the browser that needs neither Full Disk Access nor the Allow click.</div>
+    <div class="callout"><b>macOS 27 and later:</b> give the app that runs bx Full Disk Access (your terminal, your editor, Cursor or any other agent app). With bx.mcpb, add bx itself instead of Claude Desktop, which runs extensions as their own apps; bx names the file. macOS grants it per app, and bx inherits it from the app that starts it. bx reads <code>DevToolsActivePort</code> and <code>Local State</code> in the browser's folder, and macOS 27 blocks that otherwise. Rather not? The <code>launch</code> tool starts a separate copy of the browser that needs neither Full Disk Access nor the Allow click.</div>
   </section>
 
   <section id="tools">
@@ -518,7 +518,7 @@ ${STEPS}
 
 1. Tell me to download https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb, double-click it, and click Install in Claude Desktop. No Node or terminal needed.
 2. Then:
-${STEPS}
+${STEPS.replace(/give this app Full Disk Access[^\n]*/, "give bx itself Full Disk Access, not Claude: Claude Desktop runs extensions as their own apps. In System Settings > Privacy & Security > Full Disk Access, click +, press Cmd+Shift+G, paste ~/Library/Application Support/Claude/Claude Extensions/local.mcpb.facets.bx/server/bx and turn bx on.")}
 3. Tell me to quit and reopen Claude Desktop, then run bx's doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
   const MCPB = "https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb";
   const KINDS = [
@@ -530,7 +530,7 @@ ${STEPS}
       ["Ask your agent", PROMPT, "Paste this into any coding agent. It installs bx and walks you through the rest."],
     ]],
     ["Claude Desktop", [
-      ["Claude Desktop", MCPB, "Download bx.mcpb, double-click it and click Install. It carries bx itself: no Node, no terminal. Then turn on remote debugging and click Allow once.", true],
+      ["Claude Desktop", MCPB, "Download bx.mcpb, double-click it and click Install. It carries bx itself: no Node, no terminal. Then turn on remote debugging and click Allow once. On macOS 27, give bx itself Full Disk Access; bx says which file.", true],
       ["Ask Claude", DESKTOP_PROMPT, "Paste this into a Claude Desktop chat. It walks you through the download and the rest."],
       ["Other MCP apps", '{ "mcpServers": { "bx": { "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"] } } }', "For LM Studio and other apps that run local MCP servers. Needs Node 18 or later."],
     ]],
