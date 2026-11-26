@@ -482,6 +482,26 @@ func TestGotoSkipsPageCheck(t *testing.T) {
 	}
 }
 
+// A task that starts with bx open pins the open as its first navigation, a
+// goto whose URL follows the goto scrub rules.
+func TestOpenIsRecordedAsGoto(t *testing.T) {
+	open := openSteps(Request{Op: "open", Args: map[string]string{"url": "http://127.0.0.1:8000/orders/1/edit"}}, false)
+	if len(open) != 1 || open[0].Action != "goto" || open[0].URL != "http://127.0.0.1:8000/orders/1/edit" || open[0].Input != "" {
+		t.Fatalf("open: %+v", open)
+	}
+	if slot := openSteps(Request{Op: "open", Args: map[string]string{"url": "http://127.0.0.1/a?token=x"}}, false); slot[0].URL != "" || slot[0].Input != "url" {
+		t.Fatalf("open with a query should be a url slot: %+v", slot)
+	}
+	p := Pin{Entries: []Entry{
+		{Tab: "T", Op: "open", Steps: open},
+		{Tab: "T", Op: "click", Steps: []Step{{Action: "click", Element: `button "Save"`}}},
+	}}
+	steps := p.Steps()
+	if len(steps) != 2 || steps[0].Action != "goto" || refuseUnreplayable(steps, 0) != nil {
+		t.Fatalf("pin steps %+v", steps)
+	}
+}
+
 // The page path comes from the browser's target list, so a dialog does not
 // block it, and a request with no planned steps reads no page at all.
 func TestPagePathSource(t *testing.T) {

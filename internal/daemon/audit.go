@@ -326,6 +326,14 @@ func planSteps(req Request, r stepRecorder) []Step {
 	return []Step{{Action: req.Op, Unreplayable: req.Op}}
 }
 
+// openSteps is an open as a replay repeats it: a goto, scrubbed as a goto's
+// URL is. open names no tab until it runs, so it has no session to label
+// with, and a goto has no element to label; the log gives the entry the tab
+// open returns.
+func openSteps(req Request, full bool) []Step {
+	return planSteps(req, stepRecorder{label: func(el string) string { return el }, full: full})
+}
+
 func describeFill(pairs string, full bool, names map[string]refAt) string {
 	var ps [][2]string
 	_ = json.Unmarshal([]byte(pairs), &ps)

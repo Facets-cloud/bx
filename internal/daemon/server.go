@@ -162,7 +162,9 @@ func (s *server) handle(conn net.Conn) {
 	req.names = s.refNames(req.Args["tab"])
 	// Nothing is planned when the log keeps nothing: planning queries the page.
 	if values := LoadConfig().Log.values(); values != "off" && req.Args["session"] != "" {
-		if sess := s.liveSession(req.Args["tab"]); sess != nil {
+		if req.Op == "open" {
+			req.steps = openSteps(req, values == "full")
+		} else if sess := s.liveSession(req.Args["tab"]); sess != nil {
 			req.steps = planSteps(req, sess.recorder(values == "full"))
 			// A planned step starts on the page as it is now, before the request acts.
 			stampPath(req.steps, func() string { return sess.pagePath(labelWait) })
