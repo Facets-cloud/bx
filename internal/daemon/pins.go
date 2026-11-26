@@ -243,10 +243,12 @@ func refuseUnreplayable(steps []Step, from int) error {
 	return nil
 }
 
-// bindValues returns steps with each input given its value: a fill's Value, a
-// type's Text, an upload's file, a goto's URL. It fails before anything runs
-// when a value is missing or unknown.
-func bindValues(steps []Step, values map[string]string) ([]Step, error) {
+// bindValues returns steps from index from on, each input given its value: a
+// fill's Value, a type's Text, an upload's file, a goto's URL. It fails before
+// anything runs when a value is missing, or names an input the pin does not
+// have; a value for an input used only before from is ignored, so an agent
+// that resends every value can resume.
+func bindValues(steps []Step, from int, values map[string]string) ([]Step, error) {
 	known := map[string]bool{}
 	for _, st := range steps {
 		if st.Input != "" {
@@ -259,7 +261,7 @@ func bindValues(steps []Step, values map[string]string) ([]Step, error) {
 			unknown = append(unknown, k)
 		}
 	}
-	out := slices.Clone(steps)
+	out := slices.Clone(steps[from:])
 	for i, st := range out {
 		if st.Input == "" {
 			continue
@@ -303,17 +305,14 @@ type RunResult struct {
 	BatchResult
 }
 
-// resumeFrom is the pin's steps from index from on, the ones a run replays: an
-// earlier step is not run again. It refuses an index outside the pin, and a
-// step from there on that cannot be replayed.
-func resumeFrom(steps []Step, from int) ([]Step, error) {
+// checkFrom refuses a run --from outside the pin, and a step from there on
+// that cannot be replayed. An earlier step is not run again, so it is not
+// checked.
+func checkFrom(steps []Step, from int) error {
 	if from < 0 || from >= len(steps) {
-		return nil, exit.New(exit.Validation, "--from takes a step index from 0 to %d; the pin has %d steps", len(steps)-1, len(steps))
+		return exit.New(exit.Validation, "--from takes a step index from 0 to %d; the pin has %d steps", len(steps)-1, len(steps))
 	}
-	if err := refuseUnreplayable(steps, from); err != nil {
-		return nil, err
-	}
-	return steps[from:], nil
+	return refuseUnreplayable(steps, from)
 }
 
 // runPin replays a pin's steps from index from on, on a tab, with the values
@@ -327,11 +326,10 @@ func (s *server) runPin(id, name string, values map[string]string, from int, tim
 	if len(steps) == 0 {
 		return RunResult{}, exit.New(exit.User, "pin %q has no steps bx can replay: pin the task again", p.Name)
 	}
-	bound, err := resumeFrom(steps, from)
-	if err != nil {
+	if err := checkFrom(steps, from); err != nil {
 		return RunResult{}, err
 	}
-	bound, err = bindValues(bound, values)
+	bound, err := bindValues(steps, from, values)
 	if err != nil {
 		return RunResult{}, err
 	}

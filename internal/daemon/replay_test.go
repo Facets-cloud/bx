@@ -202,7 +202,7 @@ func TestBindValues(t *testing.T) {
 		{Action: "goto", Input: "url"},
 		{Action: "click", Element: `button "Next"`},
 	}
-	bound, err := bindValues(steps, map[string]string{"textbox-email": "a@b.test", "textbox-email-2": "pw",
+	bound, err := bindValues(steps, 0, map[string]string{"textbox-email": "a@b.test", "textbox-email-2": "pw",
 		"file": "/tmp/x.pdf", "url": "https://example.test/a?t=1"})
 	if err != nil {
 		t.Fatal(err)
@@ -214,11 +214,11 @@ func TestBindValues(t *testing.T) {
 	if steps[0].Value != "" || steps[3].URL != "" {
 		t.Fatal("bindValues changed its input")
 	}
-	if _, err := bindValues(steps, map[string]string{"textbox-email": "a@b.test"}); err == nil ||
+	if _, err := bindValues(steps, 0, map[string]string{"textbox-email": "a@b.test"}); err == nil ||
 		!strings.Contains(err.Error(), "textbox-email-2") {
 		t.Fatalf("missing value: err %v, want it to name textbox-email-2", err)
 	}
-	if _, err := bindValues(steps, map[string]string{"textbox-email": "x", "textbox-email-2": "y", "file": "f", "url": "u", "typo": "z"}); err == nil ||
+	if _, err := bindValues(steps, 0, map[string]string{"textbox-email": "x", "textbox-email-2": "y", "file": "f", "url": "u", "typo": "z"}); err == nil ||
 		!strings.Contains(err.Error(), "no input named typo") {
 		t.Fatalf("unknown input: err %v", err)
 	}
@@ -375,10 +375,10 @@ func TestTypedKeyIsInputSlot(t *testing.T) {
 		t.Fatalf("named key: got %+v", named)
 	}
 	steps := []Step{typed}
-	if _, err := bindValues(steps, map[string]string{"key": "ab"}); err == nil {
+	if _, err := bindValues(steps, 0, map[string]string{"key": "ab"}); err == nil {
 		t.Fatal("a two-character value for a key input was accepted")
 	}
-	bound, err := bindValues(steps, map[string]string{"key": "x"})
+	bound, err := bindValues(steps, 0, map[string]string{"key": "x"})
 	if err != nil || bound[0].Key != "x" {
 		t.Fatalf("bind: %+v %v", bound, err)
 	}
@@ -407,16 +407,40 @@ func TestResultFailure(t *testing.T) {
 // N is not refused, one from N on is, and an index outside the pin is refused.
 func TestResumeFrom(t *testing.T) {
 	steps := []Step{{Action: "click", Element: `button "A"`}, {Action: "eval", Unreplayable: "eval"}, {Action: "click", Element: `button "B"`}}
-	if got, err := resumeFrom(steps, 2); err != nil || len(got) != 1 || got[0].Element != `button "B"` {
-		t.Fatalf("resume at 2: %+v %v", got, err)
+	if err := checkFrom(steps, 2); err != nil {
+		t.Fatalf("resume at 2: %v", err)
 	}
-	if _, err := resumeFrom(steps, 0); err == nil || !strings.Contains(err.Error(), "step index 1 (eval)") {
+	if got, err := bindValues(steps, 2, nil); err != nil || len(got) != 1 || got[0].Element != `button "B"` {
+		t.Fatalf("bind from 2: %+v %v", got, err)
+	}
+	if err := checkFrom(steps, 0); err == nil || !strings.Contains(err.Error(), "step index 1 (eval)") {
 		t.Fatalf("resume at 0 should refuse the unreplayable step 1: %v", err)
 	}
 	for _, from := range []int{-1, 3} {
-		if _, err := resumeFrom(steps, from); err == nil {
+		if err := checkFrom(steps, from); err == nil {
 			t.Fatalf("from %d accepted for a 3-step pin", from)
 		}
+	}
+}
+
+// A resumed run ignores a value for an input used only before from, so an agent
+// that resends every value can resume; a name the pin does not have at all is
+// still refused, and an input from from on still needs its value.
+func TestFromIgnoresEarlierInputs(t *testing.T) {
+	steps := []Step{
+		{Action: "fill", Element: `textbox "Email"`, Input: "textbox-email"},
+		{Action: "click", Element: `button "Next"`},
+		{Action: "fill", Element: `textbox "Name"`, Input: "textbox-name"},
+	}
+	got, err := bindValues(steps, 1, map[string]string{"textbox-email": "e@x.io", "textbox-name": "Eve"})
+	if err != nil || len(got) != 2 || got[1].Value != "Eve" {
+		t.Fatalf("from 1 with every value: %+v %v", got, err)
+	}
+	if _, err := bindValues(steps, 1, map[string]string{"textbox-name": "Eve", "typo": "x"}); err == nil || !strings.Contains(err.Error(), "no input named typo") {
+		t.Fatalf("unknown name: %v", err)
+	}
+	if _, err := bindValues(steps, 1, map[string]string{"textbox-email": "e@x.io"}); err == nil || !strings.Contains(err.Error(), "textbox-name") {
+		t.Fatalf("missing later value: %v", err)
 	}
 }
 
@@ -436,7 +460,7 @@ func TestRePinKeepsInputName(t *testing.T) {
 	if len(renames) != 1 || renames[0] != "input textbox-work-email kept as textbox-email" {
 		t.Fatalf("renames %q", renames)
 	}
-	bound, err := bindValues(steps, map[string]string{"textbox-email": "new"})
+	bound, err := bindValues(steps, 0, map[string]string{"textbox-email": "new"})
 	if err != nil || bound[0].Value != "new" {
 		t.Fatalf("--set by the old name: %+v %v", bound, err)
 	}
@@ -468,7 +492,7 @@ func TestRePinAddedFieldDoesNotShift(t *testing.T) {
 	if strings.Join(notes, "; ") != "new input textbox-company; new input textbox-full-name" {
 		t.Fatalf("notes %q", notes)
 	}
-	bound, err := bindValues(got.Steps(), map[string]string{"textbox-company": "Lumen", "textbox-email": "e@x.io", "textbox-full-name": "Eve"})
+	bound, err := bindValues(got.Steps(), 0, map[string]string{"textbox-company": "Lumen", "textbox-email": "e@x.io", "textbox-full-name": "Eve"})
 	if err != nil || bound[0].Value != "Lumen" || bound[1].Value != "e@x.io" || bound[2].Value != "Eve" {
 		t.Fatalf("bound %+v %v", bound, err)
 	}
