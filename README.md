@@ -370,6 +370,7 @@ bx history                        # recent sessions
 bx history previous               # one session as a tree: tasks, pages, actions
 bx history pin previous "Onboard vendor"   # name a finished task so an agent can repeat it
 bx history pinned                 # list pins; add a name to see its steps
+bx run <tab> "Onboard vendor" --set email=a@lumen.test --set password=...   # replay a pin on a tab
 bx config                         # log settings
 bx config set log.values full     # also log typed values and whole URLs
 ```
@@ -397,9 +398,61 @@ tools. An agent can raise retention but can't lower logging; it gets the
 
 A pin is a copy of one task, kept in `~/Library/Application Support/bx/pins/`
 outside the log limits. Say "do the Onboard vendor pin for Lumen Analytics"
-and the agent reads its steps, asks you for anything to type (values were
-never logged), and follows them page by page the way a person follows notes,
-so a moved button doesn't break it.
+and the agent reads its inputs, asks you for each value (values were never
+logged), and replays the steps with `bx run`. A pin keeps each typed field as
+an input such as `textbox-email`, and each repeat of the same field gets its
+own (`textbox-email-2`), so a form that asks for the same thing twice gets two
+values. `bx run` checks every input the steps it runs use is given before it
+touches the page, and stops at the first failed step, returning the page as it
+stands. `failed` is
+the 0-based step index, as `bx batch` reports it. A step bx cannot repeat (eval,
+drag, a mouse action, a multi-file upload) is refused before anything runs: finish
+it by hand and pin again. An upload's file and a URL with a query or fragment are
+inputs (`file`, `url`), never stored. A pin saved before `bx run` existed has no
+steps to replay: pin the task again.
+
+After a flow that looks repeatable (a test, a form, recurring navigation), or
+when you say "again" or "every time", the agent asks "Save this as a routine?"
+and on yes pins it. If a run failed and the flow was finished by hand, it offers
+to re-pin under the same name; the new pin replaces the old one, so the next
+run is clean. A `wait` step in a flow replays as an expect step, so a run
+reports whether that text or element appeared.
+
+Resume a run from a step with `bx run <tab> "<pin>" --from N` (MCP: `from`),
+where N is the index a failed run names. Steps before N are not run again, and
+values for inputs used only before N are ignored. After a failure at N, fix step
+N by hand, then run with `--from N+1`. Each step records the path of the page it
+started on (no query), and a replay stops before a step when the page is on
+another path, returning the expected and actual path with the page as it stands.
+Paths match segment by segment, and a record ID may differ, so a pin recorded
+on `/orders/123/edit` runs on `/orders/456/edit`. A record ID is all digits, a
+UUID, or a 24-hex Mongo ObjectId. A slug (`/vendors/lumen-analytics`) or a
+prefixed ID (`cus_123`) is not one, so the run stops on another record; check
+you are on the right page and resume with `--from N`. A
+`goto` (or `open`) is never checked, and after a `goto` to a `url` input no step
+is checked until the next `goto` to a fixed URL, since that URL can lead to
+another record each run.
+
+Re-pinning under the same name keeps an input's name when its label is the same,
+or, when the pin has as many inputs of that kind as before, by its place among
+them (a relabelled field: `input textbox-work-email kept as textbox-email`).
+Otherwise it gets a fresh name, reported as `new input textbox-company`, so a
+field added to the form never shifts the other values.
+
+Limit: matching by place can't tell a renamed field from one removed and another
+added. If Phone goes and Company comes in, Company keeps `textbox-phone`, and
+`--set textbox-phone=555` types 555 into Company. So an input kept by place with
+a new label is marked in the pin, and each `bx run` (CLI and MCP) returns one
+line in `warning`: `warning: textbox-phone was kept by position (now textbox
+"Company"); check the value or re-pin`. The mark clears when the pin is saved
+again and that input matches its exact label, which re-pinning the same flow
+does, so re-pin once you have checked the value goes into the right field.
+
+Limit: a step's element is kept as `#k` when several on the page share a name, so
+`button "Save" #2` is the second one. A new element with the same name earlier on
+the page shifts `#k` silently, so the element a replay clicks can change without
+the run failing. The page check limits the damage: a page that moved stops the run,
+but one that only gained an element does not.
 
 To send the logs to Loki, Splunk, Datadog or a SIEM, point a log shipper
 such as Fluent Bit, Vector or the OpenTelemetry Collector at the sessions
@@ -415,6 +468,9 @@ folder. [mx](https://github.com/Facets-cloud/mx) writes the same format.
 - **Tabs it opens stay open** unless the agent closes them.
 - **No confirm gate.** bx doesn't stop a click on Submit or Send by itself;
   the skill tells the agent to ask you first.
+- **A re-pin can't tell a renamed field from a swapped one.** An input kept by
+  place gets a `warning` on each `bx run` until a re-pin matches its label
+  (see [Audit log](#audit-log)).
 
 ## How it compares
 

@@ -77,6 +77,9 @@ Act (each waits for the page to settle and reports navigation, new tabs, dialogs
                                                   [{"action":"fill","element":"e3","value":"hi"},
                                                    {"action":"key","key":"Enter"}]; stops at the
                                                   first failure
+  bx run <tab> <pin name> [--set <input>=<value> ...]
+                                                  replay a saved pin on a tab; each input
+                                                  is a value you ask the user for
   bx upload <tab> <el> <file> [<file> ...]
   bx download <tab> <el> [--out <dir>] [--name <file>]
                                     click a download and wait for the file;
@@ -207,6 +210,7 @@ var commands = map[string]func(e env) error{
 	"snapshot":      cmdSnapshot,
 	"eval":          cmdEval,
 	"batch":         cmdBatch,
+	"run":           cmdRun,
 	"wait":          cmdWait,
 	"console":       cmdConsole,
 	"network":       cmdNetwork,

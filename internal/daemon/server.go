@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -159,6 +160,16 @@ func (s *server) handle(conn net.Conn) {
 	resp := Response{}
 	began, title := time.Now(), s.taskTitle(req.Args["session"])
 	req.names = s.refNames(req.Args["tab"])
+	// Nothing is planned when the log keeps nothing: planning queries the page.
+	if values := LoadConfig().Log.values(); values != "off" && req.Args["session"] != "" {
+		if req.Op == "open" {
+			req.steps = openSteps(req, values == "full")
+		} else if sess := s.liveSession(req.Args["tab"]); sess != nil {
+			req.steps = planSteps(req, sess.recorder(values == "full"))
+			// A planned step starts on the page as it is now, before the request acts.
+			stampPath(req.steps, func() string { return sess.pagePath(labelWait) })
+		}
+	}
 	data, err := s.dispatch(req)
 	took := time.Since(began)
 	if title == "" {
@@ -246,6 +257,9 @@ func (s *server) dispatch(req Request) (any, error) {
 	case BatchResult:
 		r.Changes = s.changes(a["tab"])
 		return r, nil
+	case RunResult:
+		r.Changes = s.changes(a["tab"])
+		return r, nil
 	case Downloaded:
 		r.Changes = s.changes(a["tab"])
 		return r, nil
@@ -283,6 +297,22 @@ func (s *server) dispatchTab(op string, a map[string]string, t time.Duration) (a
 		return s.typeText(id, a["selector"], a["text"], a["submit"], t)
 	case "batch":
 		return s.batch(id, a["steps"], t)
+	case "run":
+		var values map[string]string
+		if v := a["values"]; v != "" {
+			if err := json.Unmarshal([]byte(v), &values); err != nil {
+				return nil, exit.New(exit.Validation, "run: values must be a JSON object of input name to value")
+			}
+		}
+		from := 0
+		if v := a["from"]; v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return nil, exit.New(exit.Validation, "--from takes a step index, 0 or more, got %q", v)
+			}
+			from = n
+		}
+		return s.runPin(id, a["pin"], values, from, t)
 	case "key":
 		return s.key(id, a["keys"], t)
 	case "upload":

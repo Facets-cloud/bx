@@ -180,11 +180,46 @@ but lowering logging is the user's call: give them the command.
 
 Pins are tasks saved to repeat. When the user says "pin that as <name>",
 run `bx history pin current "<name>"` (MCP: `pins` with action pin). When
-they ask to do a pinned task again, read it with `bx history pinned
-"<name>"` (MCP: `pins` action show), ask them for every value the steps
-fill or choose (values are never logged), then go through its pages in
-order: snapshot each and run its steps, in one batch where you can. If a
-page changed, do what the step meant rather than failing.
+they ask to do a pinned task again, read its inputs with `bx history pinned
+"<name>"` (MCP: `pins` action show), ask the user for each value (values are
+never logged), then replay it in one call: `bx run <tab> "<name>" --set
+<input>=<value> ...` (MCP: `pins` with action run, `tab` and `values`). A
+run stops at the first failed step and returns the page as it stands, so
+find the element it meant on that page and carry on from there. `failed` is the
+0-based step index. A pin with a step bx cannot repeat (eval, drag, a mouse
+action, a multi-file upload) is refused before anything runs: do that step by
+hand and re-pin. Upload files and URLs with a query or fragment are inputs
+(`file`, `url`), so ask the user for them. Steps that
+fail because the page changed are yours to fix, not a reason to stop.
+If a run failed and you finished the flow by hand, offer to re-pin it under
+the same name ("Re-save the fixed routine as <name>?"): `bx history pin
+current "<name>"` replaces the old pin, so the next run is clean. After you
+finish a multi-step flow that looks repeatable (a test, a form, recurring
+navigation), or the user says "again" or "every time", ask "Save this as a
+routine?" and on yes run `bx history pin current "<name>"`. A wait you ran
+(text or selector) replays as an expect step, so a run reports whether it held.
+
+Resume a failed run from its failed step with `bx run <tab> "<name>" --from N`
+(MCP: `pins` with `from`), N the 0-based index the failure names. Steps before N
+are not run again, and only the inputs of steps from N on are needed; values for
+earlier inputs are ignored. After a failure at N: fix step N by hand, then
+`--from N+1`. A run stops before a step when the page is on another path than
+the step recorded (its failure reads `expected page /x, on /y`): that is a
+different page, not a moved element, so find where the flow is before you
+resume. A record ID in the path (digits, a UUID or a 24-hex ObjectId; not a slug
+or `cus_123`) may differ, a goto is never checked, and after a goto to a `url`
+input no step is checked until the next goto to a fixed URL. When you re-pin, an
+input keeps its name by its label; a field the site added gets a fresh name,
+reported as `new input <name>`: ask the user for it before the next run. An
+input kept by position under a new label (`kept as`) may be a different field:
+until the pin is saved again with that label matching, a run's `warning` names
+it; tell the user which field the value now goes into, and re-pin once they
+confirm. A step's element `#k` is its position among
+same-named elements, so a new element with that name earlier on the page shifts
+it without failing; check the element a replay acted on.
+
+When a flow types text, use `type` (or `fill`), not `key` per character: a pin
+makes each typed key its own input (`key`, `key-2`, ...), one per character.
 
 How bx works for a task is two choices, which you make with `start` from
 what the user says. Leave out what they didn't ask for: their settings

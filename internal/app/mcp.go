@@ -338,12 +338,16 @@ func readTools() []mcpTool {
 				return mcpContent{text: daemon.FormatSettings(daemon.LoadConfig().Settings())}, nil
 			}},
 		{Name: "pins", Description: "Tasks saved to do again. list (default); show: a pin's steps page by page, to follow with values " +
-			"you ask the user for (none were logged); pin: save a session's task (default its last titled one) under a name; unpin.",
+			"you ask the user for (none were logged); run: replay a pin on a tab, given those values as inputs; " +
+			"pin: save a session's task (default its last titled one) under a name; unpin.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{
-				"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "pin", "unpin"}},
+				"action":  map[string]any{"type": "string", "enum": []string{"list", "show", "run", "pin", "unpin"}},
 				"name":    str("The pin's name, such as Onboard vendor."),
 				"session": str("For pin: current, previous or a session id."),
-				"task":    map[string]any{"type": "integer", "description": "For pin: the task's number in history's tree."}}},
+				"task":    map[string]any{"type": "integer", "description": "For pin: the task's number in history's tree."},
+				"tab":     str("For run: the tab to replay the pin on."),
+				"from":    str("For run: the step index to start at, 0-based, as a failed run names it. Resume after a failure with the failed index once fixed by hand, or the next one."),
+				"values":  map[string]any{"type": "object", "description": "For run: each input's name to the value the user gave."}}},
 			run: func(args map[string]any) (mcpContent, error) { return pinsTool(args) }},
 		opTool("list_tabs", "List open tabs, optionally only those of one profile.", "tabs",
 			map[string]any{"profile": str("Profile name or folder, exact.")}, nil, map[string]string{"profile": "profile"}),

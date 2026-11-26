@@ -8,6 +8,29 @@ import (
 	"github.com/Facets-cloud/bx/internal/daemon"
 )
 
+// A batch that stopped after some steps is PARTIAL in the log and in the pin
+// recipe, which says bx run replays the steps that ran; a batch that failed at
+// its first step is FAILED.
+func TestPartialBatchIsMarked(t *testing.T) {
+	part := daemon.Entry{Op: "batch", Target: "2 steps: click button \"A\"; fill textbox \"B\"",
+		Error: "no such element", Steps: []daemon.Step{{Action: "click", Element: `button "A"`}}}
+	if got := actionLine(part); !strings.Contains(got, "PARTIAL: no such element") {
+		t.Fatalf("partial line: %q", got)
+	}
+	none := part
+	none.Steps = nil
+	if got := actionLine(none); !strings.Contains(got, "FAILED: no such element") || strings.Contains(got, "PARTIAL") {
+		t.Fatalf("failed line: %q", got)
+	}
+	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: "p"}, Entries: []daemon.Entry{part}}
+	if got := pinRecipe(p); !strings.Contains(got, "PARTIAL: the task stopped short") || !strings.Contains(got, "replays the steps of it that ran") {
+		t.Fatalf("recipe should name the partial batch and that its steps that ran replay:\n%s", got)
+	}
+	if steps := p.Steps(); len(steps) != 1 || steps[0].Element != `button "A"` {
+		t.Fatalf("a partial batch's steps that ran should replay: %+v", steps)
+	}
+}
+
 func TestPinRoundTripAndRecipe(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t0 := time.Now()
@@ -27,7 +50,7 @@ func TestPinRoundTripAndRecipe(t *testing.T) {
 		t.Fatalf("want the titled task, got %+v %v", task, err)
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: "Onboard vendor", Title: task.title, Session: "bx-1", Pinned: t0}, Entries: task.entries}
-	if _, err := daemon.SavePin(p); err != nil {
+	if _, _, err := daemon.SavePin(p); err != nil {
 		t.Fatal(err)
 	}
 	got, err := daemon.LoadPin("onboard vendor")

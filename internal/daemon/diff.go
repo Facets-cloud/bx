@@ -25,13 +25,7 @@ func (sess *tabSession) takeSnapshot(ctx context.Context) (Snapshot, error) {
 	}
 	nodes, refs := buildSnapshot(tree.Nodes, prev, sess.frameTrees(ctx)...)
 	sess.refs, sess.refLoader, sess.snap = refs, loader, nodes
-	named := make(map[string]string, len(nodes))
-	for _, n := range nodes {
-		if n.Ref != "" {
-			named[n.Ref] = roleName(n)
-		}
-	}
-	sess.named.Store(named)
+	sess.named.Store(refAts(nodes, refs))
 	url, title := sess.location(ctx)
 	return Snapshot{URL: url, Title: title, Nodes: nodes}, nil
 }
@@ -140,16 +134,110 @@ func look(n SnapNode) string {
 	return n.Role + "\x00" + n.Name + "\x00" + n.Value + "\x00" + strings.Join(n.Props, ",")
 }
 
-// line renders one node the way Snapshot.Text does, without indent.
-// roleName is an element as role and name, the way an agent can name it
-// again on another day: button "Next".
-func roleName(n SnapNode) string {
-	if n.Name == "" {
-		return n.Role
-	}
-	return fmt.Sprintf("%s %q", n.Role, n.Name)
+// refAt is an element the latest snapshot named, as the log and pins keep it.
+type refAt struct {
+	role, name string
+	key        nodeKey
+	shared     bool // the page has another element with this role and name
 }
 
+// base is the element as role and name, the way an agent can name it again
+// on another day: button "Next".
+func (at refAt) base() string {
+	if at.name == "" {
+		return at.role
+	}
+	return fmt.Sprintf("%s %q", at.role, at.name)
+}
+
+// refAts maps each ref of a snapshot to its element. It makes no page calls:
+// the place of a shared name is looked up when a step records it (stepLabel).
+func refAts(nodes []SnapNode, refs refState) map[string]refAt {
+	total := map[string]int{}
+	for _, n := range nodes {
+		if n.Ref != "" && n.Name != "" {
+			total[n.Role+"\x00"+n.Name]++
+		}
+	}
+	out := make(map[string]refAt, len(nodes))
+	for _, n := range nodes {
+		if n.Ref == "" {
+			continue
+		}
+		out[n.Ref] = refAt{role: n.Role, name: n.Name, key: nodeKey{refs.in[n.Ref], refs.refs[n.Ref]},
+			shared: n.Name != "" && total[n.Role+"\x00"+n.Name] > 1}
+	}
+	return out
+}
+
+// placeLabel is at as a label, with its place among the page's elements of its
+// role and name when the name is shared: textbox "Email" #2. keys lists those
+// elements in the order findByName numbers them, so the saved #k finds the same
+// one on replay. A shared name whose element is not in keys has no label a
+// replay can find: that is an error, never a guess at the first match.
+func placeLabel(at refAt, keys []nodeKey) (string, error) {
+	if !at.shared {
+		return at.base(), nil
+	}
+	for i, k := range keys {
+		if k == at.key {
+			return fmt.Sprintf("%s #%d", at.base(), i+1), nil
+		}
+	}
+	return "", fmt.Errorf("the place of %s among the %d elements the page has with that name is not known", at.base(), len(keys))
+}
+
+// labeller returns the label of a ref as the latest snapshot named it, for the
+// log and pins. A ref the snapshot did not name (a CSS selector, say) is
+// returned as given. A shared name whose place cannot be found is returned as
+// its base label with an unreplayable marker, so it is never saved as the
+// first match.
+func (sess *tabSession) labeller() func(ref string) string {
+	names, _ := sess.named.Load().(map[string]refAt)
+	return func(ref string) string {
+		at, ok := names[ref]
+		if !ok {
+			return ref
+		}
+		if !at.shared {
+			return at.base()
+		}
+		return shareLabel(sess.ctx, labelWait, at, func(ctx context.Context) []nodeKey {
+			return sess.matchesByName(ctx, at.role, at.name, 0)
+		})
+	}
+}
+
+// labelWait bounds the page query that places a shared name. Labelling runs
+// before every request, so a page that cannot answer (an alert open) must not
+// hold the request.
+const labelWait = 5 * time.Second
+
+// shareLabel is the label of a shared name, its place found by match within
+// wait. A query that times out or places nothing gives the unreplayable label.
+func shareLabel(ctx context.Context, wait time.Duration, at refAt, match func(context.Context) []nodeKey) string {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	keys := match(ctx)
+	if ctx.Err() != nil {
+		return at.base() + unreplayable
+	}
+	label, err := placeLabel(at, keys)
+	if err != nil {
+		return at.base() + unreplayable
+	}
+	return label
+}
+
+// unreplayable marks a label a replay cannot find; see labeller.
+const unreplayable = " (unreplayable)"
+
+// recorder is the recorder for steps run on this tab now.
+func (sess *tabSession) recorder(full bool) stepRecorder {
+	return stepRecorder{label: sess.labeller(), full: full}
+}
+
+// line renders one node the way Snapshot.Text does, without indent.
 func line(n SnapNode) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", n.Ref, n.Role)

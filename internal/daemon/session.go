@@ -47,7 +47,7 @@ type tabSession struct {
 	keyTyping atomic.Bool  // the current request asked to type key by key (BX_TYPING=keys)
 	title     atomic.Value // string: the title of the agent session acting on the tab, if it gave one
 	step      atomic.Value // string: "3/32" while a batch runs, shown in the pointer's tag
-	named     atomic.Value // map[string]string: each ref of the latest snapshot as role and name, for the log
+	named     atomic.Value // map[string]refAt: each ref of the latest snapshot as the element it stood for, for the log
 	clicked   atomic.Int64 // unix nanoseconds of the last click on the tab, see paste
 
 	tmu      sync.Mutex
@@ -406,25 +406,10 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 	defer cancel()
 	found := 0
 	for {
-		// The tab's own page first; its frames, in the order they nest,
-		// only when it has too few.
-		var keys []nodeKey
-		for _, id := range queryByName(wctx, sess.t, "", role, name) {
-			keys = append(keys, nodeKey{docKey{}, id})
-		}
-		if len(keys) < nth {
-			for _, d := range sess.docs(wctx)[1:] {
-				obj, err := sess.docObject(wctx, d)
-				if err != nil {
-					continue
-				}
-				for _, id := range queryByName(wctx, d.t, obj, role, name) {
-					keys = append(keys, nodeKey{d.key, id})
-				}
-			}
-		}
-		if found = len(keys); found >= nth {
-			return keys[nth-1], nil
+		keys := sess.matchesByName(wctx, role, name, nth)
+		found = len(keys)
+		if k, ok := pickNth(keys, nth); ok {
+			return k, nil
 		}
 		select {
 		case <-wctx.Done():
@@ -435,6 +420,41 @@ func (sess *tabSession) findByName(ctx context.Context, role, name string, nth i
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
+}
+
+// pickNth is the element numbered nth among keys, in the order matchesByName
+// lists them; ok is false when there are fewer.
+func pickNth(keys []nodeKey, nth int) (k nodeKey, ok bool) {
+	if nth < 1 || nth > len(keys) {
+		return nodeKey{}, false
+	}
+	return keys[nth-1], true
+}
+
+// matchesByName lists the elements with this role and name in the order
+// findByName numbers them: the tab's own page, then its frames in the order
+// they nest. need is how many the caller wants: frames are searched only
+// while the page has fewer (0 searches all of them). Stable names (see
+// labelRefs) are numbered from the same list, so a saved #k finds the
+// element it was saved for.
+func (sess *tabSession) matchesByName(ctx context.Context, role, name string, need int) []nodeKey {
+	var keys []nodeKey
+	for _, id := range queryByName(ctx, sess.t, "", role, name) {
+		keys = append(keys, nodeKey{docKey{}, id})
+	}
+	if need > 0 && len(keys) >= need {
+		return keys
+	}
+	for _, d := range sess.docs(ctx)[1:] {
+		obj, err := sess.docObject(ctx, d)
+		if err != nil {
+			continue
+		}
+		for _, id := range queryByName(ctx, d.t, obj, role, name) {
+			keys = append(keys, nodeKey{d.key, id})
+		}
+	}
+	return keys
 }
 
 // nameWait bounds how long an element named by role and name may take to

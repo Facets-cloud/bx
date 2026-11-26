@@ -342,7 +342,7 @@ func cmdBatch(e env) error {
 	}
 	e.o.printJSON(res)
 	if res.Failed != nil {
-		return exit.New(exit.User, "step %d failed: %s", *res.Failed+1, res.Error)
+		return exit.New(exit.User, "step index %d failed: %s", *res.Failed, res.Error)
 	}
 	return nil
 }

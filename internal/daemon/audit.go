@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/target"
 )
@@ -44,8 +46,12 @@ type Entry struct {
 	To      string `json:"to,omitempty"`  // the page it led to, when that changed
 	Op      string `json:"op"`
 	Target  string `json:"target,omitempty"`
-	Error   string `json:"error,omitempty"`
-	MS      int64  `json:"ms"`
+	// Steps is the action as bx run replays it: elements by the name an agent
+	// can use again, no typed values (see recordStep). Empty when the op
+	// cannot be replayed.
+	Steps []Step `json:"steps,omitempty"`
+	Error string `json:"error,omitempty"`
+	MS    int64  `json:"ms"`
 }
 
 // unlogged ops say nothing about what an agent did to a page.
@@ -83,6 +89,9 @@ func (s *server) audit(req Request, title string, res any, err error, took time.
 		Tab: a["tab"], Op: req.Op, Target: describe(req.Op, a, values == "full", req.names), MS: took.Milliseconds()}
 	if err != nil {
 		e.Error = errorResponse(err).Error
+	} else {
+		e.Steps = loggedSteps(req, res)
+		e.Error = resultFailure(res)
 	}
 	if tab, ok := res.(Tab); ok { // open
 		e.Tab = string(tab.ID)
@@ -141,31 +150,38 @@ func writeEntry(e Entry) {
 	_, _ = f.Write(append(append(out, line...), '\n'))
 }
 
-// refNames is the tab's refs as role and name, as of its latest snapshot.
-func (s *server) refNames(tab string) map[string]string {
-	s.mu.Lock()
-	sess := s.sessions[target.ID(tab)]
-	s.mu.Unlock()
+// refNames is the tab's refs as the elements they stood for, as of its latest
+// snapshot.
+func (s *server) refNames(tab string) map[string]refAt {
+	sess := s.liveSession(tab)
 	if sess == nil {
 		return nil
 	}
-	m, _ := sess.named.Load().(map[string]string)
+	m, _ := sess.named.Load().(map[string]refAt)
 	return m
+}
+
+// liveSession is the tab's session when one is already open; it never opens
+// one, so logging a request does not launch a browser.
+func (s *server) liveSession(tab string) *tabSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessions[target.ID(tab)]
 }
 
 // named turns a ref such as e12 into the element it stood for, such as
 // button "Next", so the log reads the same tomorrow, when refs mean
 // nothing; anything else (a role and name, a CSS selector) stays as given.
-func named(el string, names map[string]string) string {
-	if n, ok := names[el]; ok {
-		return n
+func named(el string, names map[string]refAt) string {
+	if at, ok := names[el]; ok {
+		return at.base()
 	}
 	return el
 }
 
 // describe says what a request acted on, leaving out what was typed
 // unless full is set. Elements are logged by role and name (see named).
-func describe(op string, a map[string]string, full bool, names map[string]string) string {
+func describe(op string, a map[string]string, full bool, names map[string]refAt) string {
 	secret := func(label, v string) string {
 		if full {
 			return fmt.Sprintf("%s %q", label, v)
@@ -194,6 +210,9 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 	case "eval":
 		return secret("script", a["script"])
 	case "key":
+		if !full && typedKey(a["keys"]) {
+			return secret("key", a["keys"])
+		}
 		return a["keys"]
 	case "drag":
 		return named(a["from"], names) + " -> " + named(a["to"], names)
@@ -228,11 +247,94 @@ func describe(op string, a map[string]string, full bool, names map[string]string
 		return a["request"]
 	case "record-start":
 		return a["dir"]
+	case "run":
+		return a["pin"]
 	}
 	return ""
 }
 
-func describeFill(pairs string, full bool, names map[string]string) string {
+// loggedSteps is what a successful request did as steps bx run can replay.
+// Batches and runs report their steps as they ran; a single element action
+// is one step. Other ops leave nothing to replay.
+func loggedSteps(req Request, res any) []Step {
+	switch r := res.(type) {
+	case BatchResult:
+		return r.Recorded
+	case RunResult:
+		return r.Recorded
+	}
+	return req.steps
+}
+
+// resultFailure is why a batch or run stopped short, or "" if it finished. It
+// returns no error, so the entry must carry this: history shows it FAILED, or
+// PARTIAL when some steps ran, and a pin replays only the steps that ran.
+func resultFailure(res any) string {
+	switch r := res.(type) {
+	case BatchResult:
+		return r.Error
+	case RunResult:
+		return r.Error
+	}
+	return ""
+}
+
+// ReadOnly ops look at a page without changing it: a pin leaves them out. It
+// is the one list of such ops.
+var ReadOnly = map[string]bool{"snapshot": true, "read": true, "screenshot": true, "console": true,
+	"network": true, "storage": true, "performance": true, "emulate": true, "cdp": true, "record-start": true, "record-stop": true}
+
+// planSteps is what a request does as replayable steps, its elements labelled
+// now, before it runs, from the snapshot the request saw. A page-changing op
+// with no step form plans one unreplayable step, so a pin refuses it instead
+// of skipping it and reporting success.
+func planSteps(req Request, r stepRecorder) []Step {
+	a := req.Args
+	switch req.Op {
+	case "click":
+		return []Step{r.recordStep(Step{Action: "click", Element: a["selector"], Double: a["double"] == "true"})}
+	case "hover":
+		return []Step{r.recordStep(Step{Action: "hover", Element: a["selector"]})}
+	case "type":
+		return []Step{r.recordStep(Step{Action: "type", Element: a["selector"], Submit: a["submit"], Text: a["text"]})}
+	case "fill":
+		var pairs [][2]string
+		_ = json.Unmarshal([]byte(a["pairs"]), &pairs)
+		var out []Step
+		for _, p := range pairs {
+			out = append(out, r.recordStep(Step{Action: "fill", Element: p[0], Value: p[1]}))
+		}
+		return out
+	case "key":
+		return []Step{r.recordStep(Step{Action: "key", Key: a["keys"]})}
+	case "wait":
+		return []Step{r.recordStep(Step{Action: "wait", Element: a["selector"], Text: a["text"], Gone: a["gone"] == "true"})}
+	case "goto", "open":
+		return []Step{r.recordStep(Step{Action: "goto", URL: a["url"]})}
+	case "upload":
+		var files []string
+		_ = json.Unmarshal([]byte(a["files"]), &files)
+		if len(files) != 1 {
+			return []Step{{Action: "upload", Unreplayable: "upload of " + strconv.Itoa(len(files)) + " files"}}
+		}
+		return []Step{r.recordStep(Step{Action: "upload", Element: a["selector"]})}
+	}
+	// close ends the tab, which a replay does not need to repeat.
+	if a["tab"] == "" || unlogged[req.Op] || ReadOnly[req.Op] || req.Op == "close" {
+		return nil
+	}
+	return []Step{{Action: req.Op, Unreplayable: req.Op}}
+}
+
+// openSteps is an open as a replay repeats it: a goto, scrubbed as a goto's
+// URL is. open names no tab until it runs, so it has no session to label
+// with, and a goto has no element to label; the log gives the entry the tab
+// open returns.
+func openSteps(req Request, full bool) []Step {
+	return planSteps(req, stepRecorder{label: func(el string) string { return el }, full: full})
+}
+
+func describeFill(pairs string, full bool, names map[string]refAt) string {
 	var ps [][2]string
 	_ = json.Unmarshal([]byte(pairs), &ps)
 	var out []string
@@ -247,7 +349,7 @@ func describeFill(pairs string, full bool, names map[string]string) string {
 	return strings.Join(out, ", ")
 }
 
-func describeBatch(steps string, full bool, names map[string]string) string {
+func describeBatch(steps string, full bool, names map[string]refAt) string {
 	var ss []Step
 	_ = json.Unmarshal([]byte(steps), &ss)
 	out := []string{fmt.Sprintf("%d steps:", len(ss))}
@@ -261,7 +363,11 @@ func describeBatch(steps string, full bool, names map[string]string) string {
 				d += " " + cleanURL(st.URL)
 			}
 		case "key":
-			d += " " + st.Key
+			if !full && typedKey(st.Key) {
+				d += fmt.Sprintf(" (%d chars)", utf8.RuneCountInString(st.Key))
+			} else {
+				d += " " + st.Key
+			}
 		default:
 			if st.Element != "" {
 				d += " " + named(st.Element, names)

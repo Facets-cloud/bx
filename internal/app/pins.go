@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,28 +13,28 @@ import (
 
 // pinTask saves task n of a session (0: its last titled task, else its
 // last task) as a pin named name.
-func pinTask(ref, name string, n int) (daemon.Pin, string, error) {
+func pinTask(ref, name string, n int) (daemon.Pin, string, []string, error) {
 	list, err := daemon.ListSessions()
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	info, es, err := daemon.LoadSession(resolveSession(ref, list, daemon.CurrentSession()))
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	tasks := splitTasks(es)
 	if len(tasks) == 0 {
-		return daemon.Pin{}, "", exit.New(exit.User, "no bx activity logged for session %q (see bx history)", ref)
+		return daemon.Pin{}, "", nil, exit.New(exit.User, "no bx activity logged for session %q (see bx history)", ref)
 	}
 	t, err := pickTask(tasks, n)
 	if err != nil {
-		return daemon.Pin{}, "", err
+		return daemon.Pin{}, "", nil, err
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: name, Title: t.title, Session: info.ID, HSess: info.HSess,
 		Project: info.Project, Pinned: time.Now()}, Entries: t.entries}
-	path, err := daemon.SavePin(p)
+	path, notes, err := daemon.SavePin(p)
 	p.Slug = daemon.PinSlug(name)
-	return p, path, err
+	return p, path, notes, err
 }
 
 func pickTask(tasks []*task, n int) (*task, error) {
@@ -51,10 +52,6 @@ func pickTask(tasks []*task, n int) (*task, error) {
 	return tasks[len(tasks)-1], nil
 }
 
-// readOnly ops look at a page without changing it: a recipe leaves them out.
-var readOnly = map[string]bool{"snapshot": true, "read": true, "screenshot": true, "console": true,
-	"network": true, "storage": true, "performance": true, "emulate": true, "cdp": true, "record-start": true, "record-stop": true}
-
 // pinRecipe is a pin as steps an agent can follow again: the actions that
 // worked, grouped by the page they ran on.
 func pinRecipe(p daemon.Pin) string {
@@ -63,12 +60,29 @@ func pinRecipe(p daemon.Pin) string {
 	if p.Title != "" {
 		fmt.Fprintf(&b, "the task was: %q\n", p.Title)
 	}
-	b.WriteString("To repeat it: ask the user for anything to type or choose (values were never logged), then go " +
-		"through the pages in order. Snapshot each page and do its steps, in one batch where you can; " +
-		"if the page changed, do what the step meant.\n")
+	if len(p.Steps()) == 0 {
+		b.WriteString("This pin has no replayable steps (saved before bx run): pin the task again.\n")
+	} else {
+		if in := p.Inputs(); len(in) > 0 {
+			b.WriteString("inputs (ask the user for each value; values were never logged):\n")
+			for _, x := range in {
+				fmt.Fprintf(&b, "  %s  %s\n", x.Name, x.Label)
+			}
+		}
+		fmt.Fprintf(&b, "To repeat it in one call: bx run <tab> %q --set <input>=<value> ... If it stops on a step, fix that step and re-pin under the same name.\n", p.Name)
+	}
 	steps, skipped, page, at := 0, 0, 0, ""
+	partial := ""
 	for _, e := range p.Entries {
-		if readOnly[e.Op] || e.Error != "" {
+		if e.Error != "" && len(e.Steps) > 0 {
+			// Not listed: its logged target names every step it was sent, not the
+			// ones that ran. Pin.Steps still replays the steps that ran, so the
+			// note says so, and that the rest must be done by hand.
+			partial = e.Error
+			skipped++
+			continue
+		}
+		if daemon.ReadOnly[e.Op] || e.Error != "" {
 			skipped++
 			continue
 		}
@@ -82,6 +96,9 @@ func pinRecipe(p daemon.Pin) string {
 		}
 	}
 	fmt.Fprintf(&b, "(%s on %s; %d reads and failed attempts left out)\n", plural(steps, "step"), plural(page, "page"), skipped)
+	if partial != "" {
+		fmt.Fprintf(&b, "PARTIAL: the task stopped short in a batch (%s). bx run replays the steps of it that ran, not the rest: finish by hand and pin the task again.\n", partial)
+	}
 	return b.String()
 }
 
@@ -107,7 +124,7 @@ func pinList(ps []daemon.Pin) string {
 	for _, p := range ps {
 		n := 0
 		for _, e := range p.Entries {
-			if !readOnly[e.Op] && e.Error == "" {
+			if !daemon.ReadOnly[e.Op] && e.Error == "" {
 				n += len(recipeSteps(e))
 			}
 		}
@@ -132,11 +149,14 @@ func cmdPin(e env) error {
 			return exit.New(exit.Validation, "--task takes a task number from bx history <session>")
 		}
 	}
-	p, path, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
+	p, path, notes, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
 	if err != nil {
 		return err
 	}
 	e.o.done(fmt.Sprintf("pinned %q as %s (%s)", p.Name, p.Slug, path))
+	for _, r := range notes {
+		fmt.Fprintf(e.o.w, "  %s\n", r)
+	}
 	return nil
 }
 
@@ -164,6 +184,59 @@ func cmdPinned(e env) error {
 	}
 	fmt.Fprint(e.o.w, pinList(ps))
 	return nil
+}
+
+// cmdRun is bx run <tab> <pin name> [--set <input>=<value> ...]: replays a
+// saved pin on a tab. Its inputs are the values the user gave, never logged.
+func cmdRun(e env) error {
+	if len(e.pos) < 2 {
+		return exit.New(exit.Validation, `usage: bx run <tab> <pin name> [--set <input>=<value> ...]`)
+	}
+	values := map[string]string{}
+	for _, s := range e.a.sets {
+		k, v, ok := strings.Cut(s, "=")
+		if !ok || k == "" {
+			return exit.New(exit.Validation, "--set takes <input>=<value>, got %q", s)
+		}
+		values[k] = v
+	}
+	t, err := e.a.timeout()
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(values)
+	var res daemon.RunResult
+	if err := e.call("run", map[string]string{"tab": e.pos[0], "pin": strings.Join(e.pos[1:], " "),
+		"values": string(body), "from": e.a.flags["from"], "timeout": t}, &res); err != nil {
+		return err
+	}
+	e.o.printJSON(res)
+	if res.Failed != nil {
+		return exit.New(exit.User, "step index %d failed: %s", *res.Failed, res.Error)
+	}
+	return nil
+}
+
+// runValues is the MCP values object as the input name to value map a run
+// takes. A value may be text, a number or a boolean; a nested object or list
+// is refused.
+func runValues(v any) (map[string]string, error) {
+	out := map[string]string{}
+	if v == nil {
+		return out, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, exit.New(exit.Validation, "run: values must be an object of input name to value")
+	}
+	for k, x := range m {
+		switch x.(type) {
+		case map[string]any, []any:
+			return nil, exit.New(exit.Validation, "run: the value for %s must be text, a number or true/false", k)
+		}
+		out[k] = argString(m, k)
+	}
+	return out, nil
 }
 
 // cmdUnpin is bx history unpin <name>.
@@ -197,16 +270,31 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 			ref = "current"
 		}
 		n, _ := strconv.Atoi(argString(args, "task"))
-		p, _, err := pinTask(ref, name, n)
+		p, _, notes, err := pinTask(ref, name, n)
 		if err != nil {
 			return mcpContent{}, err
 		}
-		return mcpContent{text: pinRecipe(p)}, nil
+		text := pinRecipe(p)
+		for _, r := range notes {
+			text += "\n" + r
+		}
+		return mcpContent{text: text}, nil
 	case "unpin":
 		if err := daemon.Unpin(name); err != nil {
 			return mcpContent{}, err
 		}
 		return mcpContent{text: "unpinned " + name}, nil
+	case "run":
+		if name == "" || argString(args, "tab") == "" {
+			return mcpContent{}, exit.New(exit.Validation, "run needs a pin name and a tab")
+		}
+		values, err := runValues(args["values"])
+		if err != nil {
+			return mcpContent{}, err
+		}
+		body, _ := json.Marshal(values)
+		return daemonCall(args, "run", map[string]string{"tab": argString(args, "tab"), "pin": name,
+			"values": string(body), "from": argString(args, "from"), "timeout": orDefault(argString(args, "timeout"), "30s")})
 	}
 	ps, err := daemon.ListPins()
 	if err != nil {

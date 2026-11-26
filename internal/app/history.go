@@ -218,6 +218,11 @@ func pageLabel(e daemon.Entry) string {
 func actionLine(e daemon.Entry) string {
 	s := e.T.Local().Format("15:04:05") + "  " + strings.TrimSpace(e.Op+" "+e.Target)
 	if e.Error != "" {
+		// A batch that stopped after some steps ran is partial: its recorded
+		// steps are in the entry, and the failed one is not.
+		if len(e.Steps) > 0 {
+			return s + "  PARTIAL: " + e.Error
+		}
 		return s + "  FAILED: " + e.Error
 	}
 	s += fmt.Sprintf("  ok %s", time.Duration(e.MS)*time.Millisecond)

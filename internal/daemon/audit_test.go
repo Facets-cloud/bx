@@ -91,7 +91,7 @@ func TestCleanURLKeepsOnlyThePage(t *testing.T) {
 }
 
 func TestRefsAreLoggedByName(t *testing.T) {
-	names := map[string]string{"e12": `button "Next"`, "e4": `textbox "Email"`}
+	names := map[string]refAt{"e12": {role: "button", name: "Next"}, "e4": {role: "textbox", name: "Email"}}
 	if got := describe("click", map[string]string{"selector": "e12"}, false, names); got != `button "Next"` {
 		t.Errorf("click logged %q", got)
 	}
