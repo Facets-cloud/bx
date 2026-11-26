@@ -492,6 +492,14 @@ func TestRePinAddedFieldDoesNotShift(t *testing.T) {
 	if strings.Join(notes, "; ") != "new input textbox-company; new input textbox-full-name" {
 		t.Fatalf("notes %q", notes)
 	}
+	// Inputs with no element (a goto's url) do not match by label: a goto added
+	// before the old one changes their count, so both get fresh names, and
+	// neither reuses the old name url, so a --set url=... fails, not shifts.
+	urls, _ := withInputs(Pin{Entries: []Entry{{Steps: []Step{{Action: "goto", Input: "url"}}}}}, Pin{})
+	_, notes = withInputs(Pin{Entries: []Entry{{Steps: []Step{{Action: "goto", Input: "url"}, {Action: "goto", Input: "url"}}}}}, urls)
+	if strings.Join(notes, "; ") != "new input url-2; new input url-3" {
+		t.Fatalf("url notes %q", notes)
+	}
 	bound, err := bindValues(got.Steps(), 0, map[string]string{"textbox-company": "Lumen", "textbox-email": "e@x.io", "textbox-full-name": "Eve"})
 	if err != nil || bound[0].Value != "Lumen" || bound[1].Value != "e@x.io" || bound[2].Value != "Eve" {
 		t.Fatalf("bound %+v %v", bound, err)

@@ -107,11 +107,13 @@ func (p Pin) Inputs() []PinInput {
 // and type step's input: its element's slug (textbox-email), with -2, -3 for
 // repeats, so each step asks for its own value. prev is the pin p replaces, if
 // any, and an input keeps its old name so a --set by that name still works:
-//  1. an input whose action and element label are the old one's exactly;
+//  1. an input whose action and element label are the old one's exactly (a
+//     goto's url or a typed key has no element, so it has no label to match);
 //  2. else, only when the pin has as many inputs of its kind (see inputKind)
 //     as before, the old input at the same place among that kind, so a
 //     renamed label keeps its name ("input <new> kept as <old>");
-//  3. else it gets a fresh name, reported as "new input <name>".
+//  3. else it gets a fresh name no old input had, reported as "new input
+//     <name>".
 //
 // Matching by place when the count changed would shift every later value one
 // field off, so it is never done. It returns the notes, in input order.
@@ -139,7 +141,7 @@ func withInputs(p, prev Pin) (Pin, []string) {
 	taken := make([]bool, len(old))
 	for i, st := range in { // 1. the same label
 		for k, o := range old {
-			if !taken[k] && o.Action == st.Action && o.Element == st.Element {
+			if !taken[k] && st.Element != "" && o.Action == st.Action && o.Element == st.Element {
 				names[i], taken[k] = o.Input, true
 				break
 			}
@@ -172,7 +174,12 @@ func withInputs(p, prev Pin) (Pin, []string) {
 			}
 		}
 	}
+	// A fresh name never reuses an old one, matched or not: a --set by an old
+	// name must not land on another field.
 	used := map[string]bool{}
+	for _, o := range old {
+		used[o.Input] = true
+	}
 	for _, n := range names {
 		used[n] = true
 	}
