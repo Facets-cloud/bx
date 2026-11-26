@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   pull_request:
+# bx is a public repo, so every workflow stays on GitHub-hosted runners.
+# Don't move them to the org's self-hosted iac-arc pool: a fork's pull
+# request would run its code there.
 jobs:
   test:
     runs-on: macos-latest

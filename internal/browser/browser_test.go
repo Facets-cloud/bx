@@ -185,3 +185,18 @@ func TestAgentHasDefaultProfile(t *testing.T) {
 		t.Fatalf("got %v, %v", ps, err)
 	}
 }
+
+// Inside bx.mcpb, the hint names this binary, since Claude Desktop's own
+// Full Disk Access doesn't reach it.
+func TestFullDiskAccessHint(t *testing.T) {
+	t.Setenv("BX_MCPB", "")
+	if h := fullDiskAccessHint(); !strings.Contains(h, "the app that runs bx") {
+		t.Fatalf("outside the bundle: %q", h)
+	}
+	t.Setenv("BX_MCPB", "1")
+	self, _ := os.Executable()
+	self, _ = filepath.EvalSymlinks(self)
+	if h := fullDiskAccessHint(); !strings.Contains(h, self) || !strings.Contains(h, "Cmd+Shift+G") {
+		t.Fatalf("inside the bundle: %q", h)
+	}
+}

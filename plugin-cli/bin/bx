@@ -1,0 +1,12 @@
+#!/bin/sh
+# bin/bx in the bx-cli plugin. Claude Code puts the plugin's bin/ on the
+# agent's PATH after the user's own entries, so a bx the user installed runs
+# first and this runs only when there is none on PATH. It runs the bx in
+# $BX_INSTALL_DIR (default ~/.local/bin), installing it there first if the
+# session-start hook hasn't yet. If that install fails, it runs bx from npm.
+here=$(cd "$(dirname "$0")" && pwd)
+bin=${BX_INSTALL_DIR:-$HOME/.local/bin}/bx
+if [ ! -x "$bin" ]; then
+  sh "$here/../hooks/install.sh" >&2 || exec npx -y @facets-cloud/bx "$@"
+fi
+exec "$bin" "$@"

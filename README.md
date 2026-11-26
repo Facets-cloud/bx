@@ -149,31 +149,73 @@ and PDFs and reports titles without the prefix.
 
 ## Install
 
-**Claude Code or Codex plugin** (the server plus the bx skill, which
-teaches the agent the workflow and the safety rules, updated by the plugin
-manager):
+There are two ways in. Coding agents have a shell, so they run the `bx`
+command. Claude Desktop's chat has no shell, so it runs bx as an MCP server.
+[docs/PLUGIN-CLI.md](docs/PLUGIN-CLI.md) says why.
+
+### Coding agents
+
+**Claude Code, the `bx-cli` plugin.** It brings the `bx` command and the
+skill, which teaches the agent the workflow and the safety rules. It has no
+MCP server and needs no Node. The first time a session starts, it downloads
+bx into `~/.local/bin` and checks it against the release's checksums.
+
+```sh
+claude plugin marketplace add Facets-cloud/bx && claude plugin install bx-cli@bx
+```
+
+Claude Code asks before each `bx` command. To stop the prompts, allow
+`Bash(bx:*)`, or only the read commands, such as `Bash(bx snapshot:*)`.
+
+**Claude Code or Codex, the `bx` plugin** (the MCP server plus the same
+skill, through `npx`, so it needs Node 18 or later). If you already use it,
+nothing changes. Don't install both plugins, or the agent sees bx twice.
 
 ```sh
 claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
 codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
 ```
 
-**Claude Code or Codex, server only** (needs Node 18 or later for `npx`):
+**Server only** (Node 18 or later):
 
 ```sh
 claude mcp add -s user bx -- npx -y @facets-cloud/bx mcp
 codex mcp add bx -- npx -y @facets-cloud/bx mcp
 ```
 
-**Cursor, Claude Desktop and other MCP apps**, in their MCP config, or run
-`npx -y @facets-cloud/bx mcp install` to add it for you:
+**Cursor:** run `npx -y @facets-cloud/bx mcp install`, which also adds bx to
+Claude Desktop if it's there.
+
+**Any other agent with a shell:**
+
+```sh
+curl -fsSL https://facets-cloud.github.io/bx/install.sh | sh
+bx skill install
+```
+
+`BX_VERSION=v0.8.1` pins a release and `BX_INSTALL_DIR` picks the folder.
+
+### Claude Desktop
+
+Download [bx.mcpb](https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb)
+and double-click it, then click Install. The bundle carries bx for Apple
+silicon and Intel, so there's no Node or terminal to set up. On macOS 27 and
+later, give bx itself Full Disk Access, not Claude: Claude Desktop runs an
+extension's server as its own app, so Claude's access doesn't reach it. When
+bx is blocked, its error names the file to add (it's
+`~/Library/Application Support/Claude/Claude Extensions/local.mcpb.facets.bx/server/bx`).
+In Full Disk Access, click +, press Cmd+Shift+G, paste that path, turn bx
+on, then quit Claude with Cmd+Q and reopen it. To update, install
+the new `bx.mcpb`; bx doesn't replace itself inside the extension.
+
+Other MCP apps, such as LM Studio, take this in their MCP config:
 
 ```json
 { "mcpServers": { "bx": { "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"] } } }
 ```
 
-Restart the app after adding it, then ask it to run bx's `doctor` tool. If
-you move from `claude mcp add` to the plugin, remove the old copy
+Restart the app after adding bx, then ask it to run bx's `doctor` tool. If
+you move from `claude mcp add` to a plugin, remove the old copy
 (`claude mcp remove -s user bx`) so the agent doesn't see two.
 
 Always use the scoped name `@facets-cloud/bx`: the unscoped npm package `bx`

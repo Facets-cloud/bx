@@ -104,3 +104,40 @@ func TestLatestReleaseFromNPM(t *testing.T) {
 		t.Fatalf("got %q, %v", tag, err)
 	}
 }
+
+// Inside the bx.mcpb extension, bx must not replace its own binary, and
+// doctor must point Claude Desktop users at the new bundle.
+func TestMCPBDoesNotSelfUpdate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"tag_name":"v99.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+	old := releaseAPI
+	releaseAPI = srv.URL
+	t.Cleanup(func() { releaseAPI = old })
+	t.Setenv("BX_VIA_NPM", "")
+	t.Setenv("BX_MCPB", "1")
+	oldV := Version
+	Version = "v1.0.0"
+	t.Cleanup(func() { Version = oldV })
+
+	a, err := parseArgs([]string{"update"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	if err := (env{a: a, o: out{w: &b, errw: &b}}).dispatch(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), mcpbURL) {
+		t.Fatalf("update should point at the new bundle, got %q", b.String())
+	}
+	if c := versionCheck(); !strings.Contains(c.Detail, mcpbURL) || strings.Contains(c.Detail, "run bx update") {
+		t.Fatalf("doctor detail = %q", c.Detail)
+	}
+
+	t.Setenv("BX_MCPB", "")
+	if c := versionCheck(); !strings.Contains(c.Detail, "run bx update") {
+		t.Fatalf("outside the bundle, doctor detail = %q", c.Detail)
+	}
+}
