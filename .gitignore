@@ -1,5 +1,6 @@
 /bin/
 *.png
+!scripts/mcpb-icon.png
 .DS_Store
 npm/*/bin/bx
 npm/*/LICENSE

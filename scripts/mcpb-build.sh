@@ -26,6 +26,7 @@ chmod 755 "$stage/server/bx"
 # grant to bx survives updates; otherwise ad hoc (scripts/sign-macos.sh).
 scripts/sign-macos.sh "$stage/server/bx"
 cp LICENSE THIRD_PARTY_NOTICES "$stage/"
+cp scripts/mcpb-icon.png "$stage/icon.png"
 
 cat > "$stage/manifest.json" <<EOF
 {
@@ -40,6 +41,7 @@ cat > "$stage/manifest.json" <<EOF
   "support": "https://github.com/Facets-cloud/bx/issues",
   "repository": { "type": "git", "url": "https://github.com/Facets-cloud/bx" },
   "license": "MIT",
+  "icon": "icon.png",
   "keywords": ["browser", "chromium", "automation", "devtools"],
   "server": {
     "type": "binary",
