@@ -15,6 +15,7 @@ import (
 // StorageChange is a change to what a site stores in the user's browser:
 // set, delete or clear, in cookies, local or session storage. These are
 // the user's real logins, so every change waits for the user to Allow it
+// unless the site is already remembered for this browser and profile
 // (see approve).
 type StorageChange struct {
 	Action string `json:"action"` // set, delete or clear
@@ -26,6 +27,7 @@ type StorageChange struct {
 // Changed says what a storage change did.
 type Changed struct {
 	Changed string `json:"changed"`
+	Auto    bool   `json:"auto,omitempty"` // allowed by a saved grant, no dialog
 }
 
 func (c StorageChange) check() error {
@@ -77,9 +79,12 @@ func (s *server) changeStorage(id string, c StorageChange, timeout time.Duration
 	if err := evalJSON(ctx, sess, "location.href", &page); err != nil {
 		return Changed{}, err
 	}
-	what := c.describe(host(page))
+	site := host(page)
+	what := c.describe(site)
 	task, _ := sess.title.Load().(string)
-	if err := approve(task, what); err != nil {
+	profile := s.profileForTab(id)
+	auto, err := consentFor(task, what, s.b.Name, profile, site)
+	if err != nil {
 		return Changed{}, err
 	}
 	// The user may take up to a minute to answer: a fresh deadline for the change.
@@ -93,7 +98,7 @@ func (s *server) changeStorage(id string, c StorageChange, timeout time.Duration
 	if err != nil {
 		return Changed{}, err
 	}
-	return Changed{Changed: what}, nil
+	return Changed{Changed: what, Auto: auto}, nil
 }
 
 func changeCookies(ctx context.Context, sess *tabSession, c StorageChange, page string) error {
