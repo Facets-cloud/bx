@@ -62,8 +62,20 @@ Full Disk Access (macOS 27 and later) has to go to bx itself. Claude Desktop
 starts extension servers through `Claude.app/Contents/Helpers/disclaimer`,
 which disclaims responsibility for the child, so macOS checks the bx binary
 and ignores Claude's own access. With `BX_MCPB=1`, bx's permission error
-names its own path and the steps. The binary is ad hoc signed, so macOS
-identifies it by hash and the grant lapses when an update replaces it.
+names its own path and the steps.
+
+macOS keys that grant to the binary's designated requirement. Ad hoc signed,
+that is the code hash, so the grant would lapse with every update. So the
+release signs the binary with a self-signed "bx" identity and the fixed
+identifier `cloud.facets.bx` (`scripts/sign-macos.sh`). The requirement is
+then `identifier "cloud.facets.bx" and certificate root = H"<cert hash>"`,
+the same for every release, and the grant carries over. It is self-signed,
+not a Developer ID: Gatekeeper doesn't check a binary Claude Desktop unpacks
+itself. `scripts/make-signing-identity.sh` makes the identity once; its
+.p12 and password go in the `BX_SIGNING_P12` and `BX_SIGNING_P12_PASSWORD`
+secrets. Without them the release signs ad hoc. The certificate holds only
+`CN=bx, O=Facets`. Losing the .p12 means a new certificate, and every user
+grants Full Disk Access once more.
 
 ## Not done
 

@@ -5,3 +5,5 @@ npm/*/bin/bx
 npm/*/LICENSE
 npm/*/THIRD_PARTY_NOTICES
 *.tgz
+# scripts/make-signing-identity.sh output: the private key. Never commit it.
+bx-signing/

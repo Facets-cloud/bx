@@ -22,9 +22,9 @@ done
 lipo -create -output "$stage/server/bx" "$stage/bx_arm64" "$stage/bx_amd64"
 rm "$stage/bx_arm64" "$stage/bx_amd64"
 chmod 755 "$stage/server/bx"
-# Go signs only the arm64 build (ad hoc); sign the merged binary so both
-# slices carry a signature.
-codesign -s - -f "$stage/server/bx"
+# With BX_SIGNING_P12 set, the stable "bx" identity, so a Full Disk Access
+# grant to bx survives updates; otherwise ad hoc (scripts/sign-macos.sh).
+scripts/sign-macos.sh "$stage/server/bx"
 cp LICENSE THIRD_PARTY_NOTICES "$stage/"
 
 cat > "$stage/manifest.json" <<EOF

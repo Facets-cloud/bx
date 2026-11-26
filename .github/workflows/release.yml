@@ -14,7 +14,17 @@ jobs:
           go-version-file: go.mod
       - run: go test ./...
       - name: Build
+        env:
+          # The self-signed "bx" identity (scripts/make-signing-identity.sh).
+          # bx.mcpb's binary is signed with it so a user's Full Disk Access
+          # grant survives updates; without the secret it is signed ad hoc.
+          SIGNING_P12: ${{ secrets.BX_SIGNING_P12 }}
+          BX_SIGNING_P12_PASSWORD: ${{ secrets.BX_SIGNING_P12_PASSWORD }}
         run: |
+          if [ -n "$SIGNING_P12" ]; then
+            export BX_SIGNING_P12="$RUNNER_TEMP/bx-signing.p12"
+            printf '%s' "$SIGNING_P12" | base64 -d > "$BX_SIGNING_P12"
+          fi
           mkdir dist
           for arch in arm64 amd64; do
             GOOS=darwin GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
