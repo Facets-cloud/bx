@@ -37,6 +37,11 @@ type Step struct {
 	// Input names the pin input that a fill or type step takes its value
 	// from (see daemon.Pin). bx run sets Value or Text from it.
 	Input string `json:"input,omitempty"`
+	// ByPlace marks an input a re-pin kept by its place among inputs of its
+	// kind, not by its label (see withInputs): a renamed field and one removed
+	// with another added look the same, so bx run warns until a later re-pin
+	// matches it by its exact label.
+	ByPlace bool `json:"by_place,omitempty"`
 	// Path is the page's URL path (no query) the step started on, as recorded.
 	// A replay stops before the step when the page is not on that path (see
 	// pageMismatch). Empty when the page could not be read, or on a step that
@@ -253,8 +258,8 @@ func unchecked(steps []Step) []Step {
 }
 
 // samePage is whether two paths are the same page, a record ID aside: they
-// have as many segments, and each pair is equal or both are IDs (all digits,
-// or a UUID), so /orders/123/edit is /orders/456/edit but not /orders/new/edit.
+// have as many segments, and each pair is equal or both are IDs (see
+// recordID), so /orders/123/edit is /orders/456/edit but not /orders/new/edit.
 func samePage(a, b string) bool {
 	as, bs := strings.Split(a, "/"), strings.Split(b, "/")
 	if len(as) != len(bs) {
@@ -270,9 +275,12 @@ func samePage(a, b string) bool {
 
 var uuidSeg = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// recordID is a path segment that names a record: all digits, or a UUID.
+var objectIDSeg = regexp.MustCompile(`^[0-9a-fA-F]{24}$`)
+
+// recordID is a path segment that names a record: all digits, a UUID, or a
+// 24-hex Mongo ObjectId. A slug or a prefixed ID (cus_123) is not one.
 func recordID(seg string) bool {
-	return seg != "" && strings.Trim(seg, "0123456789") == "" || uuidSeg.MatchString(seg)
+	return seg != "" && strings.Trim(seg, "0123456789") == "" || uuidSeg.MatchString(seg) || objectIDSeg.MatchString(seg)
 }
 
 // pageMismatch is why a replayed step must not run on the page here, or "" if
