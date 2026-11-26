@@ -37,7 +37,8 @@ func skillTargets() []string {
 	return out
 }
 
-// claudePluginInstalled reports whether Claude Code has the bx plugin.
+// claudePluginInstalled reports whether Claude Code has a bx plugin, either
+// bx (the MCP server) or bx-cli (the command); both bring the skill.
 func claudePluginInstalled(home string) bool {
 	b, err := os.ReadFile(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))
 	if err != nil {
@@ -49,8 +50,9 @@ func claudePluginInstalled(home string) bool {
 	if json.Unmarshal(b, &f) != nil {
 		return false
 	}
-	_, ok := f.Plugins["bx@bx"]
-	return ok
+	_, mcp := f.Plugins["bx@bx"]
+	_, cli := f.Plugins["bx-cli@bx"]
+	return mcp || cli
 }
 
 func cmdSkillInstall(e env) error {
