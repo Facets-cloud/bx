@@ -280,7 +280,7 @@ func (s *server) runPin(id, name string, values map[string]string, from int, tim
 	if err != nil {
 		return RunResult{}, err
 	}
-	steps := p.Steps()
+	steps := unchecked(p.Steps())
 	if len(steps) == 0 {
 		return RunResult{}, exit.New(exit.User, "pin %q has no steps bx can replay: pin the task again", p.Name)
 	}

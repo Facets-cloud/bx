@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -153,7 +154,8 @@ func (s *server) runSteps(id string, steps []Step, timeout time.Duration) (Batch
 		sr := sess.recorder(full)
 		rec := sr.recordStep(st)
 		// The page is checked before the step acts, against the page it started
-		// on, so a step that navigates is still checked on the page it began on.
+		// on. A replay leaves the steps it must not check with no path (see
+		// unchecked).
 		here := sess.pagePath(timeout)
 		if msg := pageMismatch(st.Path, here); msg != "" {
 			failed := sr.failureStep(st)
@@ -227,6 +229,18 @@ func urlPath(href string) string {
 		return u.Scheme + ":" + u.Opaque
 	}
 	return u.Path
+}
+
+// unchecked is steps with the page check off where a replay must not make it:
+// a goto leaves the page it was recorded on, so the tab may start anywhere.
+func unchecked(steps []Step) []Step {
+	out := slices.Clone(steps)
+	for i := range out {
+		if out[i].Action == "goto" {
+			out[i].Path = ""
+		}
+	}
+	return out
 }
 
 // pageMismatch is why a replayed step must not run on the page here, or "" if

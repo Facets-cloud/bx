@@ -468,6 +468,20 @@ func TestPageCheck(t *testing.T) {
 	}
 }
 
+// A goto is never checked against the page it leaves: a pin recorded from
+// about:blank replays on a tab that shows anything else. Other steps keep
+// their page.
+func TestGotoSkipsPageCheck(t *testing.T) {
+	steps := []Step{{Action: "goto", URL: "http://127.0.0.1/a", Path: "about:blank"}, {Action: "click", Path: "/a"}}
+	got := unchecked(steps)
+	if pageMismatch(got[0].Path, "/somewhere/else") != "" {
+		t.Fatalf("goto checked: %+v", got[0])
+	}
+	if got[1].Path != "/a" || steps[0].Path != "about:blank" {
+		t.Fatalf("got %+v, input %+v", got, steps)
+	}
+}
+
 // The page path comes from the browser's target list, so a dialog does not
 // block it, and a request with no planned steps reads no page at all.
 func TestPagePathSource(t *testing.T) {
