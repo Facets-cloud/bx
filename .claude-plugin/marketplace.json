@@ -10,6 +10,13 @@
       "source": "./plugin",
       "category": "productivity",
       "homepage": "https://facets-cloud.github.io/bx/"
+    },
+    {
+      "name": "bx-cli",
+      "description": "bx command and skill, no MCP server: drive your Chromium browser in a named profile, with your logins. Claude Code only; installs bx itself, no Node needed",
+      "source": "./plugin-cli",
+      "category": "productivity",
+      "homepage": "https://facets-cloud.github.io/bx/"
     }
   ]
 }

@@ -22,7 +22,8 @@ jobs:
             tar -czf dist/bx_darwin_${arch}.tar.gz bx LICENSE THIRD_PARTY_NOTICES
             rm bx
           done
-          (cd dist && shasum -a 256 *.tar.gz > checksums.txt)
+          scripts/mcpb-build.sh "$GITHUB_REF_NAME" dist
+          (cd dist && shasum -a 256 *.tar.gz bx.mcpb > checksums.txt)
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,9 @@
+{
+  "name": "bx-cli",
+  "description": "Drive the Chromium browser you already have open, in a profile you name, with your logins: the bx command and the skill that teaches it, with no MCP server. Installs bx itself, no Node needed.",
+  "author": { "name": "Facets" },
+  "homepage": "https://facets-cloud.github.io/bx/",
+  "repository": "https://github.com/Facets-cloud/bx",
+  "license": "MIT",
+  "keywords": ["browser", "chromium", "cli", "automation", "devtools"]
+}

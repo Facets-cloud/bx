@@ -125,7 +125,7 @@ func versionCheck() check {
 	case err != nil:
 		c.Detail = Version + " (could not check for updates: " + err.Error() + ")"
 	case newer(latest, Version):
-		c.Detail = fmt.Sprintf("%s; %s is available: run bx update", Version, latest)
+		c.Detail = fmt.Sprintf("%s; %s is available: %s", Version, latest, updateHint())
 	default:
 		c.Detail = Version + " (latest is " + latest + ")"
 	}
@@ -179,6 +179,10 @@ func cmdUpdate(e env) error {
 	if viaNPM() && !e.a.has("check") {
 		// npm owns this binary; replacing it in place would confuse npm.
 		e.o.done("bx came from npm: npx -y " + npmPackage + " runs the latest, or run npm i -g " + npmPackage + "@latest")
+		return nil
+	}
+	if viaMCPB() && !e.a.has("check") {
+		e.o.done("bx runs inside Claude Desktop's bx extension; to update it, " + updateHint())
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

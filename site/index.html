@@ -73,6 +73,9 @@
   .installer .tabs button { flex: none; font: 500 13px "Inter Tight", sans-serif; color: #8d8d86; background: none; border: 0; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; }
   .installer .tabs button[aria-selected="true"] { color: #f1f1ef; background: #1a1a1e; }
   .installer .tabs button.ask { color: #7aa2ff; }
+  .installer .kinds { display: flex; gap: 4px; padding: 8px 8px 0; }
+  .installer .kinds button { flex: 1; font: 600 13.5px "Inter Tight", sans-serif; color: #8d8d86; background: none; border: 1px solid #222226; padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+  .installer .kinds button[aria-selected="true"] { color: #f1f1ef; background: #1a1a1e; border-color: #3a3a40; }
   .installer .body { display: flex; align-items: flex-start; gap: 10px; padding: 12px 12px 12px 18px; }
   .installer pre { flex: 1; min-width: 0; font: 13.5px/1.6 "JetBrains Mono", monospace; overflow-x: auto; white-space: pre; scrollbar-width: none; padding-top: 6px; }
   .installer pre.prompt { white-space: pre-wrap; max-height: 168px; overflow-y: auto; color: #cfcfca; scrollbar-width: thin; }
@@ -263,7 +266,7 @@
 <header class="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow"><i></i>MCP server · <span id="ver">v0.6</span> · macOS</span>
+      <span class="eyebrow"><i></i>CLI and MCP server · <span id="ver">v0.6</span> · macOS</span>
       <div class="expand" id="expand" aria-label="bx: browser exec"><span class="k">b</span><span class="rest">rowser</span><span class="gap"></span><span class="rest">e</span><span class="k">x</span><span class="rest">ec</span></div>
       <h1>Run your agent's commands in the browser you already have open.</h1>
       <p class="lede">Your profile, your tabs, your logins. Claude Code, Codex and Cursor can click through a page and read its console, network and storage, like you would in DevTools.</p>
@@ -453,7 +456,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
     <h2>Three steps, once per browser.</h2>
     <div class="callout" style="margin:24px 0"><b>Before you start:</b> bx needs a browser built on Chromium 144 or later, the version that added the remote-debugging switch below. That's Chrome 144+, or Brave, Edge, Arc or Vivaldi on Chromium 144+; Brave is the one tested end to end. The browser's About page shows its Chromium version.</div>
     <div class="steps">
-      <div class="step"><h3>Install the plugin</h3><p>Claude Code and Codex: the command at the top. It brings the MCP server and the skill, and updates with the plugin manager. Claude Desktop and Cursor: run <code>npx -y @facets-cloud/bx mcp install</code>. Any other MCP app: <code>npx -y @facets-cloud/bx mcp</code>.</p></div>
+      <div class="step"><h3>Install bx</h3><p><b>Coding agents:</b> in Claude Code, the <code>bx-cli</code> plugin brings the bx command and its skill and installs bx itself. Codex and Cursor keep the MCP server. Any agent with a shell: <code>curl -fsSL https://facets-cloud.github.io/bx/install.sh | sh</code>. <b>Claude Desktop:</b> download <a href="https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb">bx.mcpb</a> and double-click it; no Node or terminal. The installer at the top has both.</p></div>
       <div class="step"><h3>Turn on remote debugging</h3><p>It's off by default. Open the Remote debugging tab of this page in your browser (<code>#remote-debugging</code>) and switch it on. Or quit the browser and let your agent run bx's <code>setup</code> tool.</p>
         <div class="browsers"><div>Brave<code>brave://inspect</code></div><div>Chrome, Arc<code>chrome://inspect</code></div><div>Edge<code>edge://inspect</code></div><div>Vivaldi<code>vivaldi://inspect</code></div></div></div>
       <div class="step"><h3>Click Allow, once</h3><p>The browser asks before bx connects. bx keeps that connection in a small background process, so every session and app shares it until the browser quits.</p></div>
@@ -496,22 +499,41 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
 </main>
 
 <script>
-  // Install tabs: a command per client, or a prompt any agent can follow
-  const PROMPT = `Install bx (browser exec, npm package @facets-cloud/bx) for me. It's an MCP server that lets you drive my running Chromium browser in a profile I name.
+  // Install: coding agents (with a shell) or Claude Desktop (chat, no shell).
+  // Each kind has a tab per client and a prompt to paste.
+  const STEPS = `- Ask which browser I use (it must be built on Chromium 144 or later; its About page shows the version), and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup.
+- If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
+- Tell me how bx works by default: full speed, with the browser left where it is. I can say "show me" to bring the browser to the front, or "at human pace" to slow it down.`;
+  const PROMPT = `Install bx (browser exec, https://github.com/Facets-cloud/bx) for me. It lets you drive my running Chromium browser in a profile I name, with my logins.
 
 1. Install it for the app you're running in:
-   - Claude Code, as a plugin (MCP server and skill): claude plugin marketplace add Facets-cloud/bx && claude plugin install bx@bx
-   - Codex, as a plugin: codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
-   - Claude Desktop or Cursor, as an MCP server: npx -y @facets-cloud/bx mcp install
-2. Ask which browser I use (it must be built on Chromium 144 or later; its About page shows the version), and tell me to turn on remote debugging on its inspect page: brave://inspect/#remote-debugging (Chrome and Arc: chrome://, Edge: edge://, Vivaldi: vivaldi://). If I'd rather not, tell me to quit the browser and you'll run bx's setup tool.
-3. If I'm on macOS 27 or later, tell me to give this app Full Disk Access in System Settings > Privacy & Security, because bx reads the browser's DevToolsActivePort and Local State files.
-4. Tell me how bx works by default: full speed, with the browser left where it is. I can say "show me" to bring the browser to the front, or "at human pace" to slow it down, for any task. To change the defaults, run: npx -y @facets-cloud/bx config set mode watch (or pace human).
-5. Tell me to restart this app, then run the bx doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
-  const TABS = [
-    ["Claude Code", "claude plugin marketplace add Facets-cloud/bx\nclaude plugin install bx@bx", "The plugin brings the MCP server and the skill, and keeps them updated. Restart Claude Code, turn on remote debugging, click Allow once."],
-    ["Codex", "codex plugin marketplace add Facets-cloud/bx\ncodex plugin add bx@bx", "The plugin brings the MCP server and the skill. Start a new Codex session, turn on remote debugging, click Allow once."],
-    ["Cursor / Desktop", "npx -y @facets-cloud/bx mcp install", "Adds bx to Claude Desktop and Cursor if they're installed."],
-    ["Ask your agent", PROMPT, "Paste this into any agent. It installs bx and walks you through the rest."],
+   - Claude Code: claude plugin marketplace add Facets-cloud/bx && claude plugin install bx-cli@bx (the bx command and skill; installs bx itself, no Node needed)
+   - Codex: codex plugin marketplace add Facets-cloud/bx && codex plugin add bx@bx
+   - Cursor: npx -y @facets-cloud/bx mcp install
+   - Any other agent with a shell: curl -fsSL https://facets-cloud.github.io/bx/install.sh | sh, then bx skill install
+2. Then:
+${STEPS}
+3. Tell me to restart this app, then run bx doctor and explain what it reports. The browser will ask me to Allow the connection once.`;
+  const DESKTOP_PROMPT = `Walk me through setting up bx (browser exec, https://github.com/Facets-cloud/bx) in Claude Desktop. It lets you drive my running Chromium browser in a profile I name, with my logins.
+
+1. Tell me to download https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb, double-click it, and click Install in Claude Desktop. No Node or terminal needed.
+2. Then:
+${STEPS}
+3. Tell me to quit and reopen Claude Desktop, then run bx's doctor tool and explain what it reports. The browser will ask me to Allow the connection once.`;
+  const MCPB = "https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb";
+  const KINDS = [
+    ["Coding agents", [
+      ["Claude Code", "claude plugin marketplace add Facets-cloud/bx\nclaude plugin install bx-cli@bx", "The bx command and its skill. It installs bx itself, no Node needed. Prefer MCP tools? Install bx@bx instead. Restart Claude Code, turn on remote debugging, click Allow once."],
+      ["Codex", "codex plugin marketplace add Facets-cloud/bx\ncodex plugin add bx@bx", "The plugin brings the MCP server and the skill. Start a new Codex session, turn on remote debugging, click Allow once."],
+      ["Cursor", "npx -y @facets-cloud/bx mcp install", "Adds bx to Cursor's MCP config (and Claude Desktop's, if it's installed). Needs Node 18 or later."],
+      ["Terminal", "curl -fsSL https://facets-cloud.github.io/bx/install.sh | sh\nbx skill install", "Installs bx in ~/.local/bin after checking the release's checksum, then the skill for Claude Code and Codex. For any agent with a shell."],
+      ["Ask your agent", PROMPT, "Paste this into any coding agent. It installs bx and walks you through the rest."],
+    ]],
+    ["Claude Desktop", [
+      ["Claude Desktop", MCPB, "Download bx.mcpb, double-click it and click Install. It carries bx itself: no Node, no terminal. Then turn on remote debugging and click Allow once.", true],
+      ["Ask Claude", DESKTOP_PROMPT, "Paste this into a Claude Desktop chat. It walks you through the download and the rest."],
+      ["Other MCP apps", '{ "mcpServers": { "bx": { "command": "npx", "args": ["-y", "@facets-cloud/bx", "mcp"] } } }', "For LM Studio and other apps that run local MCP servers. Needs Node 18 or later."],
+    ]],
   ];
   const MODE_TABS = [
     ["Settings", "npx -y @facets-cloud/bx config set mode watch    # browser to the front by default\nnpx -y @facets-cloud/bx config set pace human    # human pace by default", "One settings file for the CLI and every MCP app; no restart needed. Or ask your agent: \"make watch my default\"."],
@@ -519,26 +541,44 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
   ];
 
   document.querySelectorAll(".installer").forEach((box) => {
-    const TABS_ = box.dataset.set === "modes" ? MODE_TABS : TABS, ask = TABS_ === TABS ? 3 : -1;
-    box.innerHTML = '<div class="tabs" role="tablist"></div><div class="body"><pre></pre><button class="btn" type="button">Copy</button></div><div class="hint"></div>';
-    const [tabs, pre, btn, hint] = [box.querySelector(".tabs"), box.querySelector("pre"), box.querySelector(".btn"), box.querySelector(".hint")];
-    const show = (i) => {
+    const kinds = box.dataset.set === "modes" ? [["", MODE_TABS]] : KINDS;
+    box.innerHTML = (kinds.length > 1 ? '<div class="kinds" role="tablist"></div>' : "") + '<div class="tabs" role="tablist"></div><div class="body"><pre></pre><button class="btn" type="button">Copy</button></div><div class="hint"></div>';
+    const [kindRow, tabs, pre, btn, hint] = [box.querySelector(".kinds"), box.querySelector(".tabs"), box.querySelector("pre"), box.querySelector(".btn"), box.querySelector(".hint")];
+    let tab;
+    const show = (TABS_, i) => {
+      tab = TABS_[i];
+      const ask = tab[1].length > 200;
       tabs.querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-selected", String(i === j)));
-      pre.textContent = TABS_[i][1];
-      pre.className = i === ask ? "prompt" : "";
-      hint.textContent = TABS_[i][2];
-      btn.textContent = i === ask ? "Copy prompt" : "Copy";
+      pre.textContent = tab[1];
+      pre.className = ask ? "prompt" : "";
+      hint.textContent = tab[2];
+      btn.textContent = tab[3] ? "Download" : ask ? "Copy prompt" : "Copy";
     };
-    TABS_.forEach(([name], i) => {
+    const pick = (k) => {
+      if (kindRow) kindRow.querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-selected", String(k === j)));
+      const TABS_ = kinds[k][1];
+      tabs.replaceChildren();
+      TABS_.forEach(([name, text], i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.role = "tab";
+        b.textContent = name;
+        if (text.length > 200) b.className = "ask";
+        b.addEventListener("click", () => show(TABS_, i));
+        tabs.append(b);
+      });
+      show(TABS_, 0);
+    };
+    if (kindRow) kinds.forEach(([name], k) => {
       const b = document.createElement("button");
       b.type = "button";
       b.role = "tab";
       b.textContent = name;
-      if (i === ask) b.className = "ask";
-      b.addEventListener("click", () => show(i));
-      tabs.append(b);
+      b.addEventListener("click", () => pick(k));
+      kindRow.append(b);
     });
     btn.addEventListener("click", async () => {
+      if (tab[3]) return void (location.href = tab[1]);
       const label = btn.textContent;
       try {
         await navigator.clipboard.writeText(pre.textContent);
@@ -548,7 +588,7 @@ resume: claude --resume 1b6e2c90-5a4d-4f1e-9c3b-7d8a2e6f0b14</span>
       }
       setTimeout(() => (btn.textContent = label), 1600);
     });
-    show(0);
+    pick(0);
   });
 
   // Theme: auto (follows the system), light, dark

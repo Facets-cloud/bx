@@ -24,6 +24,22 @@ func viaNPM() bool {
 	return err == nil && strings.Contains(self, "/node_modules/")
 }
 
+// mcpbURL is where Claude Desktop users get a new bx.mcpb.
+const mcpbURL = "https://github.com/Facets-cloud/bx/releases/latest/download/bx.mcpb"
+
+// viaMCPB reports whether this bx runs from the bx.mcpb Claude Desktop
+// extension, whose manifest sets BX_MCPB. Claude Desktop owns that folder,
+// so bx must not replace itself there.
+func viaMCPB() bool { return os.Getenv("BX_MCPB") == "1" }
+
+// updateHint says how to get a newer bx, for the way this one was installed.
+func updateHint() string {
+	if viaMCPB() {
+		return "install the new bx.mcpb in Claude Desktop: " + mcpbURL
+	}
+	return "run bx update"
+}
+
 // mcpClient is an app whose MCP servers live in a JSON file under
 // "mcpServers". Its app folder must exist for bx to touch the file.
 type mcpClient struct {
