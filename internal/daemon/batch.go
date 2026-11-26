@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -243,10 +244,33 @@ func unchecked(steps []Step) []Step {
 	return out
 }
 
+// samePage is whether two paths are the same page, a record ID aside: they
+// have as many segments, and each pair is equal or both are IDs (all digits,
+// or a UUID), so /orders/123/edit is /orders/456/edit but not /orders/new/edit.
+func samePage(a, b string) bool {
+	as, bs := strings.Split(a, "/"), strings.Split(b, "/")
+	if len(as) != len(bs) {
+		return false
+	}
+	for i := range as {
+		if as[i] != bs[i] && !(recordID(as[i]) && recordID(bs[i])) {
+			return false
+		}
+	}
+	return true
+}
+
+var uuidSeg = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// recordID is a path segment that names a record: all digits, or a UUID.
+func recordID(seg string) bool {
+	return seg != "" && strings.Trim(seg, "0123456789") == "" || uuidSeg.MatchString(seg)
+}
+
 // pageMismatch is why a replayed step must not run on the page here, or "" if
 // it may run: want is the path the step recorded, "" when it recorded none.
 func pageMismatch(want, here string) string {
-	if want == "" || want == here {
+	if want == "" || samePage(want, here) {
 		return ""
 	}
 	if here == "" {

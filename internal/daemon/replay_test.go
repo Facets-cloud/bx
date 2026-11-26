@@ -468,6 +468,34 @@ func TestPageCheck(t *testing.T) {
 	}
 }
 
+// A path that differs only in a record ID (digits or a UUID) is the same page;
+// any other difference, or another segment count, is not.
+func TestSamePage(t *testing.T) {
+	u1, u2 := "3f2b8c1e-9a4d-4e2f-8b1a-0c9d8e7f6a5b", "A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF"
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"/orders/123/edit", "/orders/456/edit", true},
+		{"/orders/123/edit", "/orders/123/view", false},
+		{"/vendors/" + u1, "/vendors/" + u2, true},
+		{"/vendors/" + u1 + "/edit", "/vendors/" + u2 + "/view", false},
+		{"/orders/123/edit", "/orders/new/edit", false},
+		{"/orders/123", "/orders/123/edit", false},
+		{"/orders/1/edit", "/orders/1/edit/", false},
+		{"about:blank", "about:blank", true},
+		{"/", "/", true},
+	}
+	for _, c := range cases {
+		if got := samePage(c.a, c.b); got != c.want {
+			t.Errorf("samePage(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+	if msg := pageMismatch("/orders/1/edit", "/orders/2/edit"); msg != "" {
+		t.Fatalf("another record refused: %q", msg)
+	}
+}
+
 // A goto is never checked against the page it leaves: a pin recorded from
 // about:blank replays on a tab that shows anything else. Other steps keep
 // their page.
