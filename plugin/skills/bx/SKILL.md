@@ -201,13 +201,21 @@ routine?" and on yes run `bx history pin current "<name>"`. A wait you ran
 
 Resume a failed run from its failed step with `bx run <tab> "<name>" --from N`
 (MCP: `pins` with `from`), N the 0-based index the failure names. Steps before N
-are not run again, and only the inputs of steps from N on are asked for. After
-a failure at N: fix step N by hand, then `--from N+1`. A run stops before a step
-when the page is on another path than the step recorded (its failure reads
-`expected page /x, on /y`): that is a different page, not a moved element, so
-find where the flow is before you resume. A step's element `#k` is its position
-among same-named elements, so a new element with that name earlier on the page
-shifts it without failing; check the element a replay acted on.
+are not run again, and only the inputs of steps from N on are needed; values for
+earlier inputs are ignored. After a failure at N: fix step N by hand, then
+`--from N+1`. A run stops before a step when the page is on another path than
+the step recorded (its failure reads `expected page /x, on /y`): that is a
+different page, not a moved element, so find where the flow is before you
+resume. A record ID in the path (digits or a UUID) may differ, a goto is never
+checked, and after a goto to a `url` input no step is checked until the next
+goto to a fixed URL. When you re-pin, an input keeps its name by its label; a
+field the site added gets a fresh name, reported as `new input <name>`: ask the
+user for it before the next run. A step's element `#k` is its position among
+same-named elements, so a new element with that name earlier on the page shifts
+it without failing; check the element a replay acted on.
+
+When a flow types text, use `type` (or `fill`), not `key` per character: a pin
+makes each typed key its own input (`key`, `key-2`, ...), one per character.
 
 How bx works for a task is two choices, which you make with `start` from
 what the user says. Leave out what they didn't ask for: their settings

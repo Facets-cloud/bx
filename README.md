@@ -419,11 +419,22 @@ run is clean. A `wait` step in a flow replays as an expect step, so a run
 reports whether that text or element appeared.
 
 Resume a run from a step with `bx run <tab> "<pin>" --from N` (MCP: `from`),
-where N is the index a failed run names. Steps before N are not run again. After
-a failure at N, fix step N by hand, then run with `--from N+1`. Each step records
-the path of the page it started on (no query), and a replay stops before a step
-when the page is on another path, returning the expected and actual path with the
-page as it stands; a navigating step is checked on the page it began on.
+where N is the index a failed run names. Steps before N are not run again, and
+values for inputs used only before N are ignored. After a failure at N, fix step
+N by hand, then run with `--from N+1`. Each step records the path of the page it
+started on (no query), and a replay stops before a step when the page is on
+another path, returning the expected and actual path with the page as it stands.
+Paths match segment by segment, and a record ID (all digits, or a UUID) may
+differ, so a pin recorded on `/orders/123/edit` runs on `/orders/456/edit`. A
+`goto` (or `open`) is never checked, and after a `goto` to a `url` input no step
+is checked until the next `goto` to a fixed URL, since that URL can lead to
+another record each run.
+
+Re-pinning under the same name keeps an input's name when its label is the same,
+or, when the pin has as many inputs of that kind as before, by its place among
+them (a relabelled field: `input textbox-work-email kept as textbox-email`).
+Otherwise it gets a fresh name, reported as `new input textbox-company`, so a
+field added to the form never shifts the other values.
 
 Limit: a step's element is kept as `#k` when several on the page share a name, so
 `button "Save" #2` is the second one. A new element with the same name earlier on
