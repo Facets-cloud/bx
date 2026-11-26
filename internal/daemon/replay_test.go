@@ -442,6 +442,38 @@ func TestRePinKeepsInputName(t *testing.T) {
 	}
 }
 
+// A field added before another on re-pin gets a fresh name, reported as new;
+// the existing field keeps its name by its label, and no value shifts.
+func TestRePinAddedFieldDoesNotShift(t *testing.T) {
+	prev, notes := withInputs(Pin{Entries: []Entry{{Steps: []Step{
+		{Action: "fill", Element: `textbox "Email"`},
+		{Action: "fill", Element: `textbox "Name"`},
+	}}}}, Pin{})
+	if len(notes) != 0 {
+		t.Fatalf("a first pin reported %q", notes)
+	}
+	p := Pin{Entries: []Entry{{Steps: []Step{
+		{Action: "fill", Element: `textbox "Company"`},
+		{Action: "fill", Element: `textbox "Email"`},
+		{Action: "fill", Element: `textbox "Full name"`},
+	}}}}
+	got, notes := withInputs(p, prev)
+	var names []string
+	for _, in := range got.Inputs() {
+		names = append(names, in.Name)
+	}
+	if strings.Join(names, ",") != "textbox-company,textbox-email,textbox-full-name" {
+		t.Fatalf("inputs %v", names)
+	}
+	if strings.Join(notes, "; ") != "new input textbox-company; new input textbox-full-name" {
+		t.Fatalf("notes %q", notes)
+	}
+	bound, err := bindValues(got.Steps(), map[string]string{"textbox-company": "Lumen", "textbox-email": "e@x.io", "textbox-full-name": "Eve"})
+	if err != nil || bound[0].Value != "Lumen" || bound[1].Value != "e@x.io" || bound[2].Value != "Eve" {
+		t.Fatalf("bound %+v %v", bound, err)
+	}
+}
+
 // A replayed step runs only on the page it recorded. A step that recorded no
 // page is not checked, and a page that cannot be read fails a checked step.
 func TestPageCheck(t *testing.T) {

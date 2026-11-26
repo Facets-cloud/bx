@@ -32,9 +32,9 @@ func pinTask(ref, name string, n int) (daemon.Pin, string, []string, error) {
 	}
 	p := daemon.Pin{PinHeader: daemon.PinHeader{Name: name, Title: t.title, Session: info.ID, HSess: info.HSess,
 		Project: info.Project, Pinned: time.Now()}, Entries: t.entries}
-	path, renames, err := daemon.SavePin(p)
+	path, notes, err := daemon.SavePin(p)
 	p.Slug = daemon.PinSlug(name)
-	return p, path, renames, err
+	return p, path, notes, err
 }
 
 func pickTask(tasks []*task, n int) (*task, error) {
@@ -148,12 +148,12 @@ func cmdPin(e env) error {
 			return exit.New(exit.Validation, "--task takes a task number from bx history <session>")
 		}
 	}
-	p, path, renames, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
+	p, path, notes, err := pinTask(e.pos[1], strings.Join(e.pos[2:], " "), n)
 	if err != nil {
 		return err
 	}
 	e.o.done(fmt.Sprintf("pinned %q as %s (%s)", p.Name, p.Slug, path))
-	for _, r := range renames {
+	for _, r := range notes {
 		fmt.Fprintf(e.o.w, "  %s\n", r)
 	}
 	return nil
@@ -269,12 +269,12 @@ func pinsTool(args map[string]any) (mcpContent, error) {
 			ref = "current"
 		}
 		n, _ := strconv.Atoi(argString(args, "task"))
-		p, _, renames, err := pinTask(ref, name, n)
+		p, _, notes, err := pinTask(ref, name, n)
 		if err != nil {
 			return mcpContent{}, err
 		}
 		text := pinRecipe(p)
-		for _, r := range renames {
+		for _, r := range notes {
 			text += "\n" + r
 		}
 		return mcpContent{text: text}, nil

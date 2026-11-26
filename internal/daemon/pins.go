@@ -106,62 +106,105 @@ func (p Pin) Inputs() []PinInput {
 // withInputs scrubs the typed values from a pin's steps and names each fill
 // and type step's input: its element's slug (textbox-email), with -2, -3 for
 // repeats, so each step asks for its own value. prev is the pin p replaces, if
-// any: an input of the same kind (see inputKind) keeps its old name, in the
-// order the inputs appear, so a --set by that name still works after a label
-// changed. It returns the renames, "input <new> kept as <old>".
+// any, and an input keeps its old name so a --set by that name still works:
+//  1. an input whose action and element label are the old one's exactly;
+//  2. else, only when the pin has as many inputs of its kind (see inputKind)
+//     as before, the old input at the same place among that kind, so a
+//     renamed label keeps its name ("input <new> kept as <old>");
+//  3. else it gets a fresh name, reported as "new input <name>".
+//
+// Matching by place when the count changed would shift every later value one
+// field off, so it is never done. It returns the notes, in input order.
 func withInputs(p, prev Pin) (Pin, []string) {
-	prior := map[string][]string{}
+	var old []Step
 	for _, e := range prev.Entries {
 		for _, st := range e.Steps {
 			if needsInput(st) {
-				k := inputKind(st)
-				prior[k] = append(prior[k], st.Input)
+				old = append(old, st)
+			}
+		}
+	}
+	entries := slices.Clone(p.Entries)
+	var in []*Step
+	for i := range entries {
+		entries[i].Steps = slices.Clone(entries[i].Steps)
+		for j := range entries[i].Steps {
+			if st := &entries[i].Steps[j]; needsInput(*st) {
+				st.Value, st.Text, st.Files = "", "", nil
+				in = append(in, st)
+			}
+		}
+	}
+	names := make([]string, len(in))
+	taken := make([]bool, len(old))
+	for i, st := range in { // 1. the same label
+		for k, o := range old {
+			if !taken[k] && o.Action == st.Action && o.Element == st.Element {
+				names[i], taken[k] = o.Input, true
+				break
+			}
+		}
+	}
+	count := map[string]int{}
+	oldPlace, newPlace := make([]int, len(old)), make([]int, len(in))
+	for k, o := range old {
+		oldPlace[k] = count[inputKind(o)]
+		count[inputKind(o)]++
+	}
+	seen := map[string]int{}
+	for i, st := range in {
+		newPlace[i] = seen[inputKind(*st)]
+		seen[inputKind(*st)]++
+	}
+	notes := make([]string, len(in))
+	for i, st := range in { // 2. the same place, when the count is unchanged
+		kind := inputKind(*st)
+		if names[i] != "" || count[kind] != seen[kind] {
+			continue
+		}
+		for k, o := range old {
+			if !taken[k] && inputKind(o) == kind && oldPlace[k] == newPlace[i] {
+				names[i], taken[k] = o.Input, true
+				if b := inputBase(*st); b != o.Input {
+					notes[i] = fmt.Sprintf("input %s kept as %s", b, o.Input)
+				}
+				break
 			}
 		}
 	}
 	used := map[string]bool{}
-	var renames []string
-	entries := make([]Entry, len(p.Entries))
-	for i, e := range p.Entries {
-		entries[i] = e
-		if len(e.Steps) == 0 {
-			continue
+	for _, n := range names {
+		used[n] = true
+	}
+	for i, st := range in { // 3. a fresh name
+		if names[i] == "" {
+			base := inputBase(*st)
+			name := base
+			for n := 2; used[name]; n++ {
+				name = fmt.Sprintf("%s-%d", base, n)
+			}
+			names[i], used[name] = name, true
+			if len(prev.Entries) > 0 {
+				notes[i] = "new input " + name
+			}
 		}
-		steps := slices.Clone(e.Steps)
-		for j := range steps {
-			st := &steps[j]
-			if !needsInput(*st) {
-				continue
-			}
-			st.Value, st.Text, st.Files = "", "", nil
-			base := st.Input
-			if base == "" {
-				base = PinSlug(st.Element)
-			}
-			if base == "" {
-				base = st.Action
-			}
-			fresh := base
-			for n := 2; used[fresh]; n++ {
-				fresh = fmt.Sprintf("%s-%d", base, n)
-			}
-			name := fresh
-			if old := prior[inputKind(*st)]; len(old) > 0 {
-				prior[inputKind(*st)] = old[1:]
-				if !used[old[0]] {
-					name = old[0]
-				}
-			}
-			if name != fresh {
-				renames = append(renames, fmt.Sprintf("input %s kept as %s", fresh, name))
-			}
-			used[name] = true
-			st.Input = name
-		}
-		entries[i].Steps = steps
+		st.Input = names[i]
 	}
 	p.Entries = entries
-	return p, renames
+	return p, slices.DeleteFunc(notes, func(s string) bool { return s == "" })
+}
+
+// inputBase is the name an input gets when nothing older names it: the slot a
+// step was recorded with (url, file, key), else its element's slug, else its
+// action.
+func inputBase(st Step) string {
+	switch {
+	case st.Input != "":
+		return st.Input
+	case PinSlug(st.Element) != "":
+		return PinSlug(st.Element)
+	}
+	return st.Action
 }
 
 // inputKind is what a re-pin matches an input by: its action and its element's
@@ -321,7 +364,7 @@ func SavePin(p Pin) (string, []string, error) {
 		return "", nil, exit.New(exit.Validation, "a pin needs a name with letters or digits")
 	}
 	prev, _ := LoadPin(p.Name) // none when there is no pin of that name yet
-	p, renames := withInputs(p, prev)
+	p, notes := withInputs(p, prev)
 	dir, err := pinsDir()
 	if err != nil {
 		return "", nil, err
@@ -341,7 +384,7 @@ func SavePin(p Pin) (string, []string, error) {
 	if err := os.WriteFile(tmp, b.Bytes(), 0o600); err != nil {
 		return "", nil, err
 	}
-	return path, renames, os.Rename(tmp, path)
+	return path, notes, os.Rename(tmp, path)
 }
 
 // LoadPin reads the pin with that name or slug.
